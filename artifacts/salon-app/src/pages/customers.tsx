@@ -63,7 +63,7 @@ export default function Customers() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [phoneError, setPhoneError] = useState("");
-  const [formData, setFormData] = useState({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] as FamilyMember[], membershipId: "" });
+  const [formData, setFormData] = useState({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] as FamilyMember[], membershipId: "", membershipStartDate: format(new Date(), "yyyy-MM-dd") });
   const [showFamilySection, setShowFamilySection] = useState(false);
 
   const [viewCustomerId, setViewCustomerId] = useState<string | null>(null);
@@ -108,7 +108,7 @@ export default function Customers() {
   };
 
   const resetAddForm = () => {
-    setFormData({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [], membershipId: "" });
+    setFormData({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [], membershipId: "", membershipStartDate: format(new Date(), "yyyy-MM-dd") });
     setPhoneError("");
     setShowFamilySection(false);
   };
@@ -124,7 +124,7 @@ export default function Customers() {
             await fetch(`${API_BASE}/customer-memberships`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ customerId, membershipId: formData.membershipId, startDate: format(new Date(), "yyyy-MM-dd") }),
+              body: JSON.stringify({ customerId, membershipId: formData.membershipId, startDate: formData.membershipStartDate }),
             });
           } catch {}
         }
@@ -437,8 +437,8 @@ export default function Customers() {
               </div>
 
               {/* Membership */}
-              <div>
-                <label className="block text-sm font-medium mb-1.5 text-muted-foreground">Membership <span className="text-muted-foreground/60 font-normal">(optional)</span></label>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-muted-foreground">Membership <span className="text-muted-foreground/60 font-normal">(optional)</span></label>
                 <div className="relative">
                   <Crown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500 pointer-events-none" />
                   <select
@@ -446,7 +446,7 @@ export default function Customers() {
                     value={formData.membershipId}
                     onChange={e => {
                       const val = e.target.value;
-                      setFormData(f => ({ ...f, membershipId: val, familyMembers: val ? f.familyMembers : [], }));
+                      setFormData(f => ({ ...f, membershipId: val, familyMembers: val ? f.familyMembers : [] }));
                       if (!val) setShowFamilySection(false);
                     }}
                   >
@@ -459,12 +459,31 @@ export default function Customers() {
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                 </div>
-                {formData.membershipId && (
-                  <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
-                    <Crown className="w-3 h-3" />
-                    Membership will be activated from today
-                  </p>
-                )}
+                {formData.membershipId && (() => {
+                  const plan = membershipPlans.find((m: any) => (m.id || m._id) === formData.membershipId);
+                  const expiry = plan && formData.membershipStartDate
+                    ? format(subDays(addMonths(parseISO(formData.membershipStartDate), Number(plan.duration)), 1), "dd MMM yyyy")
+                    : null;
+                  return (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                      <div>
+                        <label className="block text-xs font-medium text-amber-700 mb-1">Start Date</label>
+                        <input
+                          type="date"
+                          value={formData.membershipStartDate}
+                          onChange={e => setFormData(f => ({ ...f, membershipStartDate: e.target.value }))}
+                          className="w-full p-2 rounded-lg border border-amber-200 bg-white text-sm focus:ring-2 focus:ring-amber-300 outline-none"
+                        />
+                      </div>
+                      {expiry && (
+                        <p className="text-xs text-amber-700 flex items-center gap-1">
+                          <Crown className="w-3 h-3" />
+                          Valid until: <span className="font-semibold ml-1">{expiry}</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Family Members Toggle — only when membership is assigned */}
