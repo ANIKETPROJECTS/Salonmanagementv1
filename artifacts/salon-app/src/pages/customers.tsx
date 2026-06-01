@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useListCustomers, useCreateCustomer } from "@workspace/api-client-react";
-import { Search, Plus, User, Phone, Calendar, Eye, Pencil, Trash2, X, Scissors, Package, FileText, BadgeCheck } from "lucide-react";
+import { Search, Plus, User, Phone, Calendar, Eye, Pencil, Trash2, X, Scissors, Package, FileText, BadgeCheck, Users, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -8,9 +8,13 @@ import { InvoiceModal } from "@/components/InvoiceModal";
 
 const API_BASE = "/api";
 const PAGE_SIZE = 10;
+const MAX_FAMILY = 4;
 
 type SortKey = "default" | "most-spent" | "least-spent" | "most-visits" | "least-visits";
 type GenderFilter = "all" | "male" | "female";
+
+type FamilyMember = { name: string; gender: string; phone: string; dob: string; anniversary: string };
+const EMPTY_MEMBER: FamilyMember = { name: "", gender: "", phone: "", dob: "", anniversary: "" };
 
 function GenderToggle({ value, onChange, dark = false }: { value: string; onChange: (v: string) => void; dark?: boolean }) {
   const base = dark
@@ -56,16 +60,18 @@ export default function Customers() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [phoneError, setPhoneError] = useState("");
-  const [formData, setFormData] = useState({ name: "", phone: "", dob: "", gender: "" });
+  const [formData, setFormData] = useState({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] as FamilyMember[] });
+  const [showFamilySection, setShowFamilySection] = useState(false);
 
   const [viewCustomerId, setViewCustomerId] = useState<string | null>(null);
   const [customerDetail, setCustomerDetail] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const [editCustomer, setEditCustomer] = useState<any>(null);
-  const [editForm, setEditForm] = useState({ name: "", phone: "", dob: "", gender: "" });
+  const [editForm, setEditForm] = useState({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] as FamilyMember[] });
   const [editPhoneError, setEditPhoneError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [showEditFamilySection, setShowEditFamilySection] = useState(false);
 
   const [deleteCustomer, setDeleteCustomer] = useState<any>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -103,8 +109,9 @@ export default function Customers() {
       onSuccess: () => {
         toast({ title: "Customer Added", description: `${formData.name} has been registered.` });
         setShowAdd(false);
-        setFormData({ name: "", phone: "", dob: "", gender: "" });
+        setFormData({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] });
         setPhoneError("");
+        setShowFamilySection(false);
         refetch();
       },
       onError: () => toast({ title: "Error", description: "Failed to add customer.", variant: "destructive" }),
@@ -126,8 +133,19 @@ export default function Customers() {
 
   const openEdit = (c: any) => {
     setEditCustomer(c);
-    setEditForm({ name: c.name || "", phone: c.phone || "", dob: c.dob ? c.dob.substring(0, 10) : "", gender: c.gender || "" });
+    setEditForm({
+      name: c.name || "",
+      phone: c.phone || "",
+      dob: c.dob ? c.dob.substring(0, 10) : "",
+      anniversary: c.anniversary ? c.anniversary.substring(0, 10) : "",
+      gender: c.gender || "",
+      familyMembers: Array.isArray(c.familyMembers) ? c.familyMembers.map((m: any) => ({
+        name: m.name || "", gender: m.gender || "", phone: m.phone || "",
+        dob: m.dob ? m.dob.substring(0, 10) : "", anniversary: m.anniversary ? m.anniversary.substring(0, 10) : "",
+      })) : [],
+    });
     setEditPhoneError("");
+    setShowEditFamilySection(Array.isArray(c.familyMembers) && c.familyMembers.length > 0);
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -138,7 +156,7 @@ export default function Customers() {
       const res = await fetch(`${API_BASE}/customers/${editCustomer.id || editCustomer._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editForm.name, phone: editForm.phone, dob: editForm.dob, gender: editForm.gender }),
+        body: JSON.stringify({ name: editForm.name, phone: editForm.phone, dob: editForm.dob, anniversary: editForm.anniversary, gender: editForm.gender, familyMembers: editForm.familyMembers }),
       });
       if (!res.ok) throw new Error();
       toast({ title: "Customer Updated", description: `${editForm.name} has been updated.` });
@@ -342,26 +360,29 @@ export default function Customers() {
       {/* ── Add Customer Modal ── */}
       {showAdd && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-card rounded-3xl p-8 w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-card rounded-3xl w-full max-w-lg shadow-2xl max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between px-8 pt-8 pb-4 shrink-0">
               <h2 className="text-2xl font-serif font-bold text-primary">New Customer</h2>
-              <button onClick={() => { setShowAdd(false); setPhoneError(""); }} className="p-2 rounded-lg hover:bg-muted transition-colors">
+              <button onClick={() => { setShowAdd(false); setPhoneError(""); setShowFamilySection(false); setFormData({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] }); }} className="p-2 rounded-lg hover:bg-muted transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleCreate} className="space-y-4">
+            <form onSubmit={handleCreate} className="overflow-y-auto flex-1 px-8 pb-8 space-y-4">
+              {/* Name */}
               <div>
-                <label className="block text-sm font-medium mb-1 text-muted-foreground">Full Name *</label>
+                <label className="block text-sm font-medium mb-1 text-muted-foreground">Customer Name *</label>
                 <input required autoFocus placeholder="Enter full name"
                   className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
                   value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
               </div>
+              {/* Gender */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-muted-foreground">Gender</label>
                 <GenderToggle value={formData.gender} onChange={v => setFormData({ ...formData, gender: v })} />
               </div>
+              {/* Phone */}
               <div>
-                <label className="block text-sm font-medium mb-1 text-muted-foreground">Phone Number * (10 digits)</label>
+                <label className="block text-sm font-medium mb-1 text-muted-foreground">Contact No * (10 digits)</label>
                 <input required type="tel" maxLength={10} placeholder="10-digit mobile number"
                   className={`w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 outline-none ${phoneError ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
                   value={formData.phone}
@@ -369,14 +390,94 @@ export default function Customers() {
                   onBlur={e => validatePhone(e.target.value)} />
                 {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
               </div>
+              {/* DOB */}
               <div>
-                <label className="block text-sm font-medium mb-1 text-muted-foreground">Date of Birth</label>
+                <label className="block text-sm font-medium mb-1 text-muted-foreground">Birth Date <span className="text-muted-foreground/60 font-normal">(optional)</span></label>
                 <input type="date"
                   className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
                   value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value })} />
               </div>
-              <div className="flex gap-3 mt-6">
-                <button type="button" onClick={() => { setShowAdd(false); setPhoneError(""); }}
+              {/* Anniversary */}
+              <div>
+                <label className="block text-sm font-medium mb-1 text-muted-foreground">Anniversary Date <span className="text-muted-foreground/60 font-normal">(optional)</span></label>
+                <input type="date"
+                  className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
+                  value={formData.anniversary} onChange={e => setFormData({ ...formData, anniversary: e.target.value })} />
+              </div>
+
+              {/* Family Members Toggle */}
+              <div className="pt-1">
+                <button type="button"
+                  onClick={() => {
+                    if (!showFamilySection) { setShowFamilySection(true); if (formData.familyMembers.length === 0) setFormData(f => ({ ...f, familyMembers: [{ ...EMPTY_MEMBER }] })); }
+                    else setShowFamilySection(false);
+                  }}
+                  className="flex items-center gap-2 w-full px-4 py-3 rounded-xl border border-dashed border-primary/40 text-primary hover:bg-primary/5 transition-colors font-medium text-sm">
+                  <Users className="w-4 h-4" />
+                  {showFamilySection ? "Hide Family Members" : "Add Family Members"}
+                  {showFamilySection ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
+                </button>
+              </div>
+
+              {/* Family Members Section */}
+              {showFamilySection && (
+                <div className="space-y-4 bg-muted/20 rounded-2xl p-4 border border-border/50">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-foreground">Family Members <span className="text-xs text-muted-foreground font-normal">(up to {MAX_FAMILY})</span></p>
+                    {formData.familyMembers.length < MAX_FAMILY && (
+                      <button type="button"
+                        onClick={() => setFormData(f => ({ ...f, familyMembers: [...f.familyMembers, { ...EMPTY_MEMBER }] }))}
+                        className="flex items-center gap-1 text-xs font-semibold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/30 transition-colors">
+                        <Plus className="w-3.5 h-3.5" /> Add Member
+                      </button>
+                    )}
+                  </div>
+                  {formData.familyMembers.map((m, idx) => (
+                    <div key={idx} className="bg-card rounded-xl p-4 border border-border/50 space-y-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Member {idx + 1}</span>
+                        <button type="button" onClick={() => setFormData(f => ({ ...f, familyMembers: f.familyMembers.filter((_, i) => i !== idx) }))}
+                          className="p-1 rounded-lg hover:bg-rose-50 hover:text-rose-600 text-muted-foreground transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1 text-muted-foreground">Name *</label>
+                        <input required placeholder="Member name"
+                          className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                          value={m.name} onChange={e => { const members = [...formData.familyMembers]; members[idx] = { ...m, name: e.target.value }; setFormData(f => ({ ...f, familyMembers: members })); }} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1.5 text-muted-foreground">Gender</label>
+                        <GenderToggle value={m.gender} onChange={v => { const members = [...formData.familyMembers]; members[idx] = { ...m, gender: v }; setFormData(f => ({ ...f, familyMembers: members })); }} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1 text-muted-foreground">Contact No</label>
+                        <input type="tel" maxLength={10} placeholder="10-digit number"
+                          className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                          value={m.phone} onChange={e => { const v = e.target.value.replace(/\D/g, ""); const members = [...formData.familyMembers]; members[idx] = { ...m, phone: v }; setFormData(f => ({ ...f, familyMembers: members })); }} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium mb-1 text-muted-foreground">Birth Date <span className="text-muted-foreground/60">(opt)</span></label>
+                          <input type="date"
+                            className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                            value={m.dob} onChange={e => { const members = [...formData.familyMembers]; members[idx] = { ...m, dob: e.target.value }; setFormData(f => ({ ...f, familyMembers: members })); }} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium mb-1 text-muted-foreground">Anniversary <span className="text-muted-foreground/60">(opt)</span></label>
+                          <input type="date"
+                            className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                            value={m.anniversary} onChange={e => { const members = [...formData.familyMembers]; members[idx] = { ...m, anniversary: e.target.value }; setFormData(f => ({ ...f, familyMembers: members })); }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setShowAdd(false); setPhoneError(""); setShowFamilySection(false); setFormData({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] }); }}
                   className="flex-1 py-3 rounded-xl border hover:bg-muted font-medium transition-colors">Cancel</button>
                 <button type="submit" disabled={createCustomer.isPending}
                   className="flex-1 py-3 rounded-xl bg-primary text-white font-medium hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 disabled:opacity-50">
@@ -391,16 +492,16 @@ export default function Customers() {
       {/* ── Edit Customer Modal ── */}
       {editCustomer && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-card rounded-3xl p-8 w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-card rounded-3xl w-full max-w-lg shadow-2xl max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between px-8 pt-8 pb-4 shrink-0">
               <h2 className="text-2xl font-serif font-bold text-amber-600">Edit Customer</h2>
               <button onClick={() => setEditCustomer(null)} className="p-2 rounded-lg hover:bg-muted transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleEdit} className="space-y-4">
+            <form onSubmit={handleEdit} className="overflow-y-auto flex-1 px-8 pb-8 space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1 text-muted-foreground">Full Name *</label>
+                <label className="block text-sm font-medium mb-1 text-muted-foreground">Customer Name *</label>
                 <input required autoFocus placeholder="Enter full name"
                   className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
                   value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
@@ -410,7 +511,7 @@ export default function Customers() {
                 <GenderToggle value={editForm.gender} onChange={v => setEditForm({ ...editForm, gender: v })} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-muted-foreground">Phone Number * (10 digits)</label>
+                <label className="block text-sm font-medium mb-1 text-muted-foreground">Contact No * (10 digits)</label>
                 <input required type="tel" maxLength={10} placeholder="10-digit mobile number"
                   className={`w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 outline-none ${editPhoneError ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
                   value={editForm.phone}
@@ -419,12 +520,89 @@ export default function Customers() {
                 {editPhoneError && <p className="text-red-500 text-xs mt-1">{editPhoneError}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-muted-foreground">Date of Birth</label>
+                <label className="block text-sm font-medium mb-1 text-muted-foreground">Birth Date <span className="text-muted-foreground/60 font-normal">(optional)</span></label>
                 <input type="date"
                   className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
                   value={editForm.dob} onChange={e => setEditForm({ ...editForm, dob: e.target.value })} />
               </div>
-              <div className="flex gap-3 mt-6">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-muted-foreground">Anniversary Date <span className="text-muted-foreground/60 font-normal">(optional)</span></label>
+                <input type="date"
+                  className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
+                  value={editForm.anniversary} onChange={e => setEditForm({ ...editForm, anniversary: e.target.value })} />
+              </div>
+
+              {/* Family Members Toggle */}
+              <div className="pt-1">
+                <button type="button"
+                  onClick={() => {
+                    if (!showEditFamilySection) { setShowEditFamilySection(true); if (editForm.familyMembers.length === 0) setEditForm(f => ({ ...f, familyMembers: [{ ...EMPTY_MEMBER }] })); }
+                    else setShowEditFamilySection(false);
+                  }}
+                  className="flex items-center gap-2 w-full px-4 py-3 rounded-xl border border-dashed border-amber-400/50 text-amber-600 hover:bg-amber-50 transition-colors font-medium text-sm">
+                  <Users className="w-4 h-4" />
+                  {showEditFamilySection ? "Hide Family Members" : `Family Members${editForm.familyMembers.length > 0 ? ` (${editForm.familyMembers.length})` : ""}`}
+                  {showEditFamilySection ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
+                </button>
+              </div>
+
+              {showEditFamilySection && (
+                <div className="space-y-4 bg-muted/20 rounded-2xl p-4 border border-border/50">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-foreground">Family Members <span className="text-xs text-muted-foreground font-normal">(up to {MAX_FAMILY})</span></p>
+                    {editForm.familyMembers.length < MAX_FAMILY && (
+                      <button type="button"
+                        onClick={() => setEditForm(f => ({ ...f, familyMembers: [...f.familyMembers, { ...EMPTY_MEMBER }] }))}
+                        className="flex items-center gap-1 text-xs font-semibold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/30 transition-colors">
+                        <Plus className="w-3.5 h-3.5" /> Add Member
+                      </button>
+                    )}
+                  </div>
+                  {editForm.familyMembers.map((m, idx) => (
+                    <div key={idx} className="bg-card rounded-xl p-4 border border-border/50 space-y-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Member {idx + 1}</span>
+                        <button type="button" onClick={() => setEditForm(f => ({ ...f, familyMembers: f.familyMembers.filter((_, i) => i !== idx) }))}
+                          className="p-1 rounded-lg hover:bg-rose-50 hover:text-rose-600 text-muted-foreground transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1 text-muted-foreground">Name *</label>
+                        <input required placeholder="Member name"
+                          className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                          value={m.name} onChange={e => { const members = [...editForm.familyMembers]; members[idx] = { ...m, name: e.target.value }; setEditForm(f => ({ ...f, familyMembers: members })); }} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1.5 text-muted-foreground">Gender</label>
+                        <GenderToggle value={m.gender} onChange={v => { const members = [...editForm.familyMembers]; members[idx] = { ...m, gender: v }; setEditForm(f => ({ ...f, familyMembers: members })); }} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1 text-muted-foreground">Contact No</label>
+                        <input type="tel" maxLength={10} placeholder="10-digit number"
+                          className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                          value={m.phone} onChange={e => { const v = e.target.value.replace(/\D/g, ""); const members = [...editForm.familyMembers]; members[idx] = { ...m, phone: v }; setEditForm(f => ({ ...f, familyMembers: members })); }} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium mb-1 text-muted-foreground">Birth Date <span className="text-muted-foreground/60">(opt)</span></label>
+                          <input type="date"
+                            className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                            value={m.dob} onChange={e => { const members = [...editForm.familyMembers]; members[idx] = { ...m, dob: e.target.value }; setEditForm(f => ({ ...f, familyMembers: members })); }} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium mb-1 text-muted-foreground">Anniversary <span className="text-muted-foreground/60">(opt)</span></label>
+                          <input type="date"
+                            className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                            value={m.anniversary} onChange={e => { const members = [...editForm.familyMembers]; members[idx] = { ...m, anniversary: e.target.value }; setEditForm(f => ({ ...f, familyMembers: members })); }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEditCustomer(null)}
                   className="flex-1 py-3 rounded-xl border hover:bg-muted font-medium transition-colors">Cancel</button>
                 <button type="submit" disabled={editSaving}

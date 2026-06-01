@@ -38,21 +38,23 @@ router.get("/customers", async (req, res) => {
 
 // Create customer
 router.post("/customers", async (req, res) => {
-  const { name, phone, email, dob, notes, gender } = req.body;
-  const customer = await Customer.create({ name, phone, email, dob, notes, gender });
+  const { name, phone, email, dob, anniversary, notes, gender, familyMembers } = req.body;
+  const customer = await Customer.create({ name, phone, email, dob, anniversary, notes, gender, familyMembers: familyMembers || [] });
   res.status(201).json({ ...customer.toObject(), id: customer._id.toString() });
 });
 
 // Update customer
 router.patch("/customers/:customerId", async (req, res) => {
   const { customerId } = req.params;
-  const { name, phone, dob, notes, email, gender } = req.body;
+  const { name, phone, dob, anniversary, notes, email, gender, familyMembers } = req.body;
   const customer = await Customer.findByIdAndUpdate(
     customerId,
     {
       ...(name && { name }), ...(phone && { phone }),
-      ...(dob !== undefined && { dob }), ...(notes !== undefined && { notes }),
+      ...(dob !== undefined && { dob }), ...(anniversary !== undefined && { anniversary }),
+      ...(notes !== undefined && { notes }),
       ...(email !== undefined && { email }), ...(gender !== undefined && { gender }),
+      ...(familyMembers !== undefined && { familyMembers }),
     },
     { new: true }
   );

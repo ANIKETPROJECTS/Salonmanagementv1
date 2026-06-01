@@ -1,17 +1,38 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 // ── Customer ──────────────────────────────────────────────
+export interface IFamilyMember {
+  name: string;
+  gender?: string;
+  phone?: string;
+  dob?: string;
+  anniversary?: string;
+}
+
 export interface ICustomer extends Document {
   name: string;
   phone: string;
   email?: string;
   dob?: string;
+  anniversary?: string;
   notes?: string;
   gender?: string;
+  familyMembers?: IFamilyMember[];
   totalSpend: number;
   totalVisits: number;
   createdAt: Date;
 }
+
+const FamilyMemberSchema = new Schema<IFamilyMember>(
+  {
+    name: { type: String, required: true },
+    gender: { type: String, enum: ["male", "female", ""], default: "" },
+    phone: String,
+    dob: String,
+    anniversary: String,
+  },
+  { _id: false }
+);
 
 const CustomerSchema = new Schema<ICustomer>(
   {
@@ -19,8 +40,10 @@ const CustomerSchema = new Schema<ICustomer>(
     phone: { type: String, required: true, unique: true },
     email: String,
     dob: String,
+    anniversary: String,
     notes: String,
     gender: { type: String, enum: ["male", "female", ""], default: "" },
+    familyMembers: { type: [FamilyMemberSchema], default: [] },
     totalSpend: { type: Number, default: 0 },
     totalVisits: { type: Number, default: 0 },
   },
