@@ -51,6 +51,7 @@ export default function POS() {
   const [customerAnniversary, setCustomerAnniversary] = useState<string>("");
   const [paymentMethod, setPaymentMethod]   = useState<"cash" | "upi" | "card" | "wallet">("upi");
   const [taxEnabled, setTaxEnabled]         = useState(false);
+  const [taxRate, setTaxRate]               = useState(18);
   const [globalDiscountAmt, setGlobalDiscountAmt]   = useState(0);
   const [customerSearch, setCustomerSearch]         = useState("");
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
@@ -62,7 +63,7 @@ export default function POS() {
   const [addLoading, setAddLoading]       = useState(false);
   const [typePicker, setTypePicker]       = useState<any | null>(null);
 
-  const taxPercent = taxEnabled ? 18 : 0;
+  const taxPercent = taxEnabled ? taxRate : 0;
   const services   = servicesData?.services || [];
   const products   = productsData?.products || [];
   const customers  = customersData?.customers || [];
@@ -480,9 +481,13 @@ export default function POS() {
                     </div>
                     <div className="flex items-center shrink-0 rounded-lg overflow-hidden bg-sidebar">
                       <span className="px-1.5 text-[10px] font-medium border-r h-full flex items-center py-1.5 text-white border-sidebar-border">₹</span>
-                      <input type="number" min={0} placeholder="0"
+                      <input type="text" inputMode="numeric" placeholder="0"
                         value={item.discountAmt === 0 ? "" : item.discountAmt}
-                        onChange={e => { const base = item.price * item.quantity; updateCartItem(item.uid, "discountAmt", Math.min(base, Math.max(0, Number(e.target.value) || 0))); }}
+                        onChange={e => {
+                          const digits = e.target.value.replace(/\D/g, "");
+                          const base = item.price * item.quantity;
+                          updateCartItem(item.uid, "discountAmt", Math.min(base, Number(digits) || 0));
+                        }}
                         className={`w-12 text-xs bg-transparent px-1.5 py-1.5 focus:outline-none text-center font-semibold text-white ${noSpinner}`}
                       />
                     </div>
@@ -510,8 +515,11 @@ export default function POS() {
               </span>
               <div className="flex items-center ml-auto rounded-lg overflow-hidden bg-sidebar-accent">
                 <span className="text-[11px] px-1.5 flex items-center py-1.5 border-r text-white border-sidebar-border">₹</span>
-                <input type="number" min={0} value={globalDiscountAmt === 0 ? "" : globalDiscountAmt}
-                  onChange={e => setGlobalDiscountAmt(Math.max(0, Number(e.target.value) || 0))} placeholder="0"
+                <input type="text" inputMode="numeric" value={globalDiscountAmt === 0 ? "" : globalDiscountAmt}
+                  onChange={e => {
+                    const digits = e.target.value.replace(/\D/g, "");
+                    setGlobalDiscountAmt(Math.min(subtotal, Number(digits) || 0));
+                  }} placeholder="0"
                   className={`w-16 text-xs text-center px-1.5 py-1 focus:outline-none bg-transparent font-semibold text-white ${noSpinner}`}
                 />
               </div>
@@ -526,11 +534,24 @@ export default function POS() {
                   <div className="w-3 h-3 rounded-full absolute top-0.5 transition-all bg-white"
                     style={{ left: taxEnabled ? "calc(100% - 14px)" : "2px" }} />
                 </div>
-                GST 18%
+                GST
               </button>
-              <span className="font-medium text-white">
-                {taxEnabled ? `+₹${taxAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "—"}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center rounded-lg overflow-hidden bg-sidebar-accent">
+                  <input type="text" inputMode="numeric" value={taxRate}
+                    onChange={e => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      const val = Math.min(100, Number(digits) || 0);
+                      setTaxRate(val);
+                    }}
+                    className={`w-8 text-xs text-center px-1 py-1 focus:outline-none bg-transparent font-semibold text-white ${noSpinner}`}
+                  />
+                  <span className="text-[11px] pr-1.5 text-white/70">%</span>
+                </div>
+                <span className="font-medium text-white min-w-[3rem] text-right">
+                  {taxEnabled ? `+₹${taxAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "—"}
+                </span>
+              </div>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-sidebar-border">
               <span className="font-bold text-base text-white">Final Amount</span>
