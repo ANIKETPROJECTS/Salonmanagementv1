@@ -580,17 +580,17 @@ export default function Services() {
             value={searchFilter} onChange={e => setSearchFilter(e.target.value)}
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {displayCategories.map(cat => (
-            <button key={cat} onClick={() => setCategoryFilter(cat)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
-                categoryFilter === cat
-                  ? "bg-primary text-white border-primary shadow-md shadow-primary/20"
-                  : "bg-card text-muted-foreground border-border/50 hover:border-primary/40 hover:text-primary"
-              }`}>
-              {cat}
-            </button>
-          ))}
+        <div className="relative">
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <select
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="appearance-none pl-4 pr-10 py-2.5 rounded-xl border bg-card shadow-sm focus:ring-2 focus:ring-primary/20 outline-none text-sm font-medium text-foreground cursor-pointer min-w-[180px]"
+          >
+            {displayCategories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -605,78 +605,78 @@ export default function Services() {
           <p className="text-sm mt-1">Try adjusting filters or add a new service</p>
         </div>
       ) : (
-        <div className="space-y-8">
-          {Object.entries(grouped).map(([cat, items]) => (
-            <div key={cat}>
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-xs font-bold uppercase tracking-widest text-primary/70 bg-primary/8 px-3 py-1 rounded-full border border-primary/20">{cat}</span>
-                <span className="text-xs text-muted-foreground">{items.length} service{items.length !== 1 ? "s" : ""}</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {items.map((s: any) => {
-                  const variants: TypeVariant[] = Array.isArray(s.types) ? s.types : [];
-                  const memberPrice = s.memberPrice ?? Math.round(s.price * 0.8);
-                  const memberDiscount = s.memberDiscount ?? 20;
-                  return (
-                    <div key={s.id || s._id} className="bg-card rounded-2xl p-5 border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 group relative">
-                      <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors leading-tight mb-3">{s.name}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 items-stretch">
+          {filtered.map((s: any) => {
+            const variants: TypeVariant[] = Array.isArray(s.types) ? s.types : [];
+            const memberPrice = s.memberPrice ?? Math.round(s.price * 0.8);
+            const memberDiscount = s.memberDiscount ?? 20;
+            const cat = s.category || "Other";
+            return (
+              <div key={s.id || s._id} className="bg-card rounded-2xl p-5 border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 group relative flex flex-col">
+                {/* Category badge */}
+                <div className="mb-2">
+                  <span className="inline-block text-[10px] font-bold uppercase tracking-widest text-primary/70 bg-primary/8 px-2.5 py-0.5 rounded-full border border-primary/20">
+                    {cat}
+                  </span>
+                </div>
 
-                      {variants.length > 0 ? (
-                        <div className="border-t border-border/50 pt-3 space-y-1.5">
-                          <div className="grid grid-cols-3 gap-1 mb-1">
-                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Type</span>
-                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Regular</span>
-                            <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide text-right">Member</span>
+                <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors leading-tight mb-3 pr-14">{s.name}</h3>
+
+                <div className="mt-auto">
+                  {variants.length > 0 ? (
+                    <div className="border-t border-border/50 pt-3 space-y-1.5">
+                      <div className="grid grid-cols-3 gap-1 mb-1">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Type</span>
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Regular</span>
+                        <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide text-right">Member</span>
+                      </div>
+                      {variants.map((v: TypeVariant) => (
+                        <div key={v.name} className="grid grid-cols-3 gap-1 items-center">
+                          <span className="text-xs font-medium text-foreground">{v.name}</span>
+                          <div className="flex items-center justify-end gap-0.5 text-primary font-bold text-xs">
+                            <IndianRupee className="w-3 h-3 shrink-0" />{v.price.toLocaleString()}
                           </div>
-                          {variants.map((v: TypeVariant) => (
-                            <div key={v.name} className="grid grid-cols-3 gap-1 items-center">
-                              <span className="text-xs font-medium text-foreground truncate">{v.name}</span>
-                              <div className="flex items-center justify-end gap-0.5 text-primary font-bold text-xs">
-                                <IndianRupee className="w-3 h-3" />{v.price.toLocaleString()}
-                              </div>
-                              <div className="flex items-center justify-end gap-0.5 text-emerald-600 font-semibold text-xs">
-                                <IndianRupee className="w-3 h-3" />{v.memberPrice.toLocaleString()}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="border-t border-border/50 pt-3 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground">Regular</span>
-                            <div className="flex items-center gap-1 text-primary font-bold">
-                              <IndianRupee className="w-3.5 h-3.5" /> {s.price.toLocaleString()}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1 text-xs text-emerald-600">
-                              <Users className="w-3 h-3" /> Members ({memberDiscount}% off)
-                            </div>
-                            <div className="flex items-center gap-1 text-emerald-600 font-semibold text-sm">
-                              <IndianRupee className="w-3.5 h-3.5" /> {memberPrice.toLocaleString()}
-                            </div>
+                          <div className="flex items-center justify-end gap-0.5 text-emerald-600 font-semibold text-xs">
+                            <IndianRupee className="w-3 h-3 shrink-0" />{v.memberPrice.toLocaleString()}
                           </div>
                         </div>
-                      )}
-
-                      <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => openEdit(s)}
-                          className="p-1.5 rounded-lg bg-card border border-border/60 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors shadow-sm"
-                          title="Edit service">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => setDeleteTarget(s)}
-                          className="p-1.5 rounded-lg bg-card border border-border/60 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 transition-colors shadow-sm"
-                          title="Delete service">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="border-t border-border/50 pt-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Regular</span>
+                        <div className="flex items-center gap-0.5 text-primary font-bold">
+                          <IndianRupee className="w-3.5 h-3.5 shrink-0" /> {s.price.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1 text-xs text-emerald-600">
+                          <Users className="w-3 h-3 shrink-0" /> Members ({memberDiscount}% off)
+                        </div>
+                        <div className="flex items-center gap-0.5 text-emerald-600 font-semibold text-sm">
+                          <IndianRupee className="w-3.5 h-3.5 shrink-0" /> {memberPrice.toLocaleString()}
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+
+                <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => openEdit(s)}
+                    className="p-1.5 rounded-lg bg-card border border-border/60 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors shadow-sm"
+                    title="Edit service">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => setDeleteTarget(s)}
+                    className="p-1.5 rounded-lg bg-card border border-border/60 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 transition-colors shadow-sm"
+                    title="Delete service">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
