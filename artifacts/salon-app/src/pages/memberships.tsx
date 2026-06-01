@@ -38,6 +38,11 @@ export default function Memberships() {
   const [planForm, setPlanForm] = useState({ name: "", price: "", duration: "3", benefits: "", discountPercent: "" });
   const [planSaving, setPlanSaving] = useState(false);
 
+  // Edit plan modal
+  const [editPlan, setEditPlan] = useState<any | null>(null);
+  const [editPlanForm, setEditPlanForm] = useState({ name: "", price: "", duration: "3", benefits: "", discountPercent: "" });
+  const [editPlanSaving, setEditPlanSaving] = useState(false);
+
   // Edit active member modal
   const [editMember, setEditMember] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ startDate: "", endDate: "", discountPercent: "", membershipId: "", membershipName: "" });
@@ -116,6 +121,44 @@ export default function Memberships() {
       toast({ title: "Failed to create plan", variant: "destructive" });
     } finally {
       setPlanSaving(false);
+    }
+  };
+
+  const openEditPlan = (plan: any) => {
+    setEditPlan(plan);
+    setEditPlanForm({
+      name: plan.name || "",
+      price: String(plan.price ?? ""),
+      duration: String(plan.duration ?? "3"),
+      benefits: plan.benefits || "",
+      discountPercent: plan.discountPercent != null ? String(plan.discountPercent) : "",
+    });
+  };
+
+  const handleEditPlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editPlan) return;
+    setEditPlanSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/memberships/${editPlan.id || editPlan._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editPlanForm.name.trim(),
+          price: Number(editPlanForm.price),
+          duration: Number(editPlanForm.duration),
+          benefits: editPlanForm.benefits.trim(),
+          discountPercent: Number(editPlanForm.discountPercent) || 0,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast({ title: "Plan updated!" });
+      setEditPlan(null);
+      fetchPlans();
+    } catch {
+      toast({ title: "Failed to update plan", variant: "destructive" });
+    } finally {
+      setEditPlanSaving(false);
     }
   };
 
@@ -311,13 +354,22 @@ export default function Memberships() {
                         <h3 className="text-lg font-bold text-foreground">{plan.name}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">{plan.duration} month{plan.duration !== 1 ? "s" : ""} validity</p>
                       </div>
-                      <button
-                        onClick={() => handleDeletePlan(plan)}
-                        className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                        title="Delete plan"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditPlan(plan)}
+                          className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                          title="Edit plan"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeletePlan(plan)}
+                          className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                          title="Delete plan"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
                     <p className="text-2xl font-bold text-primary mb-2">₹{Number(plan.price).toLocaleString("en-IN")}</p>
@@ -444,6 +496,70 @@ export default function Memberships() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Plan Modal */}
+      {editPlan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md animate-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <h2 className="text-xl font-serif font-bold text-primary">Edit Plan</h2>
+              <button onClick={() => setEditPlan(null)} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleEditPlan} className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Plan Name *</label>
+                <input required type="text" placeholder="e.g. Gold, Premium, Basic"
+                  value={editPlanForm.name}
+                  onChange={e => setEditPlanForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full p-2.5 rounded-xl border border-border bg-background text-sm focus:ring-2 focus:ring-primary/40 outline-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Price (₹) *</label>
+                  <input required type="number" min="0" placeholder="3000"
+                    value={editPlanForm.price}
+                    onChange={e => setEditPlanForm(p => ({ ...p, price: e.target.value }))}
+                    className="w-full p-2.5 rounded-xl border border-border bg-background text-sm focus:ring-2 focus:ring-primary/40 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Duration (months) *</label>
+                  <input required type="number" min="1" placeholder="3"
+                    value={editPlanForm.duration}
+                    onChange={e => setEditPlanForm(p => ({ ...p, duration: e.target.value }))}
+                    className="w-full p-2.5 rounded-xl border border-border bg-background text-sm focus:ring-2 focus:ring-primary/40 outline-none" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Service Discount (%)</label>
+                <input type="number" min="0" max="100" placeholder="0"
+                  value={editPlanForm.discountPercent}
+                  onChange={e => setEditPlanForm(p => ({ ...p, discountPercent: e.target.value }))}
+                  className="w-full p-2.5 rounded-xl border border-border bg-background text-sm focus:ring-2 focus:ring-primary/40 outline-none" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Benefits</label>
+                <textarea rows={3} placeholder="Free threading monthly, Priority booking..."
+                  value={editPlanForm.benefits}
+                  onChange={e => setEditPlanForm(p => ({ ...p, benefits: e.target.value }))}
+                  className="w-full p-2.5 rounded-xl border border-border bg-background text-sm focus:ring-2 focus:ring-primary/40 outline-none resize-none" />
+                <p className="text-[11px] text-muted-foreground mt-1">Separate each benefit with a comma</p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setEditPlan(null)}
+                  className="flex-1 py-3 rounded-xl border border-border font-semibold text-sm hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={editPlanSaving}
+                  className="flex-1 py-3 rounded-xl bg-primary text-white font-bold text-sm disabled:opacity-50 hover:bg-primary/90 transition-colors">
+                  {editPlanSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit Active Member Modal */}
       {editMember && (

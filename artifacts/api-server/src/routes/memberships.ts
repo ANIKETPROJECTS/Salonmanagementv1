@@ -25,6 +25,20 @@ router.post("/memberships", async (req, res) => {
   res.status(201).json({ ...membership.toObject(), id: membership._id.toString() });
 });
 
+router.patch("/memberships/:id", async (req, res) => {
+  const { id } = req.params;
+  const { name, price, duration, benefits, discountPercent } = req.body;
+  const update: Record<string, any> = {};
+  if (name !== undefined) update.name = name;
+  if (price !== undefined) update.price = Number(price);
+  if (duration !== undefined) update.duration = Number(duration);
+  if (benefits !== undefined) update.benefits = benefits;
+  if (discountPercent !== undefined) update.discountPercent = Number(discountPercent);
+  const membership = await Membership.findByIdAndUpdate(id, update, { new: true });
+  if (!membership) return res.status(404).json({ error: "Membership not found" });
+  res.json({ ...membership.toObject(), id: membership._id.toString() });
+});
+
 router.delete("/memberships/:id", async (req, res) => {
   const { id } = req.params;
   const membership = await Membership.findByIdAndDelete(id);
