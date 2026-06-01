@@ -4,15 +4,22 @@ import { Plus, IndianRupee, X, Search, ChevronDown, Tag, Upload, Download, Users
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
 
+type TypeVariant = { name: string; price: number; memberDiscount: number; memberPrice: number };
+
+const EMPTY_VARIANT: TypeVariant = { name: "", price: 0, memberDiscount: 20, memberPrice: 0 };
+
 const EMPTY_FORM = {
   name: "",
   category: "",
-  type: "",
+  types: [] as TypeVariant[],
   price: 0,
   memberDiscount: 20,
   memberPrice: 0,
 };
 
+type ServiceForm = typeof EMPTY_FORM;
+
+// ── SearchableDropdown ─────────────────────────────────────
 function SearchableDropdown({
   label,
   options,
@@ -118,8 +125,71 @@ function SearchableDropdown({
   );
 }
 
-type ServiceForm = typeof EMPTY_FORM;
+// ── TypeVariantRow ─────────────────────────────────────────
+function TypeVariantRow({ variant, onChange, onRemove, index }: {
+  variant: TypeVariant;
+  onChange: (v: TypeVariant) => void;
+  onRemove: () => void;
+  index: number;
+}) {
+  const setPrice = (price: number) => {
+    const memberPrice = price > 0 ? Math.round(price * (1 - variant.memberDiscount / 100)) : 0;
+    onChange({ ...variant, price, memberPrice });
+  };
+  const setDiscount = (memberDiscount: number) => {
+    const memberPrice = variant.price > 0 ? Math.round(variant.price * (1 - memberDiscount / 100)) : 0;
+    onChange({ ...variant, memberDiscount, memberPrice });
+  };
+  const setMemberPrice = (memberPrice: number) => {
+    const memberDiscount = variant.price > 0 ? Math.round(((variant.price - memberPrice) / variant.price) * 100) : 0;
+    onChange({ ...variant, memberPrice, memberDiscount });
+  };
 
+  return (
+    <div className="bg-muted/30 rounded-xl p-3 border border-border/50 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground font-medium w-5 shrink-0">{index + 1}.</span>
+        <input required placeholder="Type name (e.g. Short, Medium...)"
+          className="flex-1 p-2 rounded-lg border bg-card text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+          value={variant.name}
+          onChange={e => onChange({ ...variant, name: e.target.value })}
+        />
+        <button type="button" onClick={onRemove}
+          className="p-1.5 rounded-lg hover:bg-rose-50 hover:text-rose-600 text-muted-foreground transition-colors shrink-0">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-3 gap-2 pl-7">
+        <div>
+          <label className="block text-[10px] font-medium text-muted-foreground mb-1">Price (₹) *</label>
+          <input type="number" required min="0" placeholder="0"
+            className="w-full p-2 rounded-lg border bg-card text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+            value={variant.price || ""}
+            onChange={e => setPrice(Number(e.target.value))}
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium text-emerald-600 mb-1">Disc %</label>
+          <input type="number" min="0" max="100" placeholder="20"
+            className="w-full p-2 rounded-lg border bg-card text-sm focus:ring-2 focus:ring-emerald-400/30 outline-none"
+            value={variant.memberDiscount === 0 ? "" : variant.memberDiscount}
+            onChange={e => setDiscount(Number(e.target.value) || 0)}
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium text-emerald-600 mb-1">Member (₹)</label>
+          <input type="number" min="0" placeholder="auto"
+            className="w-full p-2 rounded-lg border bg-card text-sm focus:ring-2 focus:ring-emerald-400/30 outline-none"
+            value={variant.memberPrice === 0 ? "" : variant.memberPrice}
+            onChange={e => setMemberPrice(Number(e.target.value) || 0)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ServiceModal ───────────────────────────────────────────
 function ServiceModal({
   title,
   form,
@@ -128,7 +198,6 @@ function ServiceModal({
   onClose,
   isPending,
   allCategories,
-  allTypes,
 }: {
   title: string;
   form: ServiceForm;
@@ -137,8 +206,9 @@ function ServiceModal({
   onClose: () => void;
   isPending: boolean;
   allCategories: string[];
-  allTypes: string[];
 }) {
+  const safeTypes = Array.isArray(form.types) ? form.types : [];
+
   const setPrice = (val: number) => {
     const mp = val > 0 ? Math.round(val * (1 - form.memberDiscount / 100)) : 0;
     setForm(f => ({ ...f, price: val, memberPrice: mp }));
@@ -152,6 +222,14 @@ function ServiceModal({
     setForm(f => ({ ...f, memberPrice: val, memberDiscount: disc }));
   };
 
+  const addVariant = () => setForm(f => ({ ...f, types: [...(Array.isArray(f.types) ? f.types : []), { ...EMPTY_VARIANT }] }));
+  const removeVariant = (i: number) => setForm(f => ({ ...f, types: f.types.filter((_, idx) => idx !== i) }));
+  const updateVariant = (i: number, v: TypeVariant) => setForm(f => {
+    const types = [...f.types];
+    types[i] = v;
+    return { ...f, types };
+  });
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-card rounded-3xl p-8 w-full max-w-lg shadow-2xl shadow-black/20 max-h-[90vh] overflow-y-auto">
@@ -164,7 +242,7 @@ function ServiceModal({
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1.5">Service Name *</label>
-            <input required autoFocus placeholder="e.g. Deep Conditioning"
+            <input required autoFocus placeholder="e.g. Classic Wash - Loreal"
               className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -173,47 +251,82 @@ function ServiceModal({
 
           <SearchableDropdown label="Category *" options={allCategories} value={form.category}
             onSelect={v => setForm(f => ({ ...f, category: v }))} placeholder="Search category..." />
-          <SearchableDropdown label="Type" options={allTypes} value={form.type}
-            onSelect={v => setForm(f => ({ ...f, type: v }))} placeholder="e.g. Basic, Premium..." />
 
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Price (₹) *</label>
-            <input type="number" required min="0" placeholder="0"
-              className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
-              value={form.price || ""}
-              onChange={e => setPrice(Number(e.target.value))}
-            />
-          </div>
+          {/* Type Variants */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Type Variants</label>
+              <button type="button" onClick={addVariant}
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/30 transition-colors">
+                <Plus className="w-3.5 h-3.5" /> Add Type
+              </button>
+            </div>
 
-          <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl p-4 border border-emerald-200 dark:border-emerald-800/40 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-emerald-600" />
-              <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Member Pricing</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-1.5">Member Discount (%)</label>
-                <input type="number" min="0" max="100" placeholder="20"
-                  className="w-full p-3 rounded-xl border bg-white dark:bg-muted/30 focus:ring-2 focus:ring-emerald-400/30 outline-none text-sm"
-                  value={form.memberDiscount === 0 ? "" : form.memberDiscount}
-                  onChange={e => setMemberDiscount(Number(e.target.value) || 0)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-1.5">Price for Members (₹)</label>
-                <input type="number" min="0" placeholder="auto"
-                  className="w-full p-3 rounded-xl border bg-white dark:bg-muted/30 focus:ring-2 focus:ring-emerald-400/30 outline-none text-sm"
-                  value={form.memberPrice === 0 ? "" : form.memberPrice}
-                  onChange={e => setMemberPrice(Number(e.target.value) || 0)}
-                />
-              </div>
-            </div>
-            {form.price > 0 && (
-              <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                Members save ₹{(form.price - form.memberPrice).toLocaleString()} ({form.memberDiscount}% off the regular price)
+            {safeTypes.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic py-1">
+                No variants — this service has a single price below. Click "Add Type" to create price variants (e.g. Short, Medium, Long).
               </p>
+            ) : (
+              <div className="space-y-2">
+                {safeTypes.map((v, i) => (
+                  <TypeVariantRow key={i} index={i} variant={v}
+                    onChange={nv => updateVariant(i, nv)}
+                    onRemove={() => removeVariant(i)} />
+                ))}
+              </div>
             )}
           </div>
+
+          {/* Base price — only when no type variants */}
+          {safeTypes.length === 0 && (
+            <>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Price (₹) *</label>
+                <input type="number" required min="0" placeholder="0"
+                  className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
+                  value={form.price || ""}
+                  onChange={e => setPrice(Number(e.target.value))}
+                />
+              </div>
+
+              <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl p-4 border border-emerald-200 dark:border-emerald-800/40 space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Users className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Member Pricing</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-1.5">Member Discount (%)</label>
+                    <input type="number" min="0" max="100" placeholder="20"
+                      className="w-full p-3 rounded-xl border bg-white dark:bg-muted/30 focus:ring-2 focus:ring-emerald-400/30 outline-none text-sm"
+                      value={form.memberDiscount === 0 ? "" : form.memberDiscount}
+                      onChange={e => setMemberDiscount(Number(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-1.5">Price for Members (₹)</label>
+                    <input type="number" min="0" placeholder="auto"
+                      className="w-full p-3 rounded-xl border bg-white dark:bg-muted/30 focus:ring-2 focus:ring-emerald-400/30 outline-none text-sm"
+                      value={form.memberPrice === 0 ? "" : form.memberPrice}
+                      onChange={e => setMemberPrice(Number(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+                {form.price > 0 && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                    Members save ₹{(form.price - form.memberPrice).toLocaleString()} ({form.memberDiscount}% off the regular price)
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Member pricing hint when variants exist */}
+          {safeTypes.length > 0 && (
+            <p className="text-xs text-muted-foreground bg-muted/40 rounded-xl p-3 border border-border/40">
+              Each type variant has its own price and member discount above.
+            </p>
+          )}
 
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
@@ -231,6 +344,7 @@ function ServiceModal({
   );
 }
 
+// ── Main Page ──────────────────────────────────────────────
 export default function Services() {
   const { data, isLoading, refetch } = useListServices();
   const createService = useCreateService();
@@ -250,7 +364,6 @@ export default function Services() {
   const [categoryFilter, setCategoryFilter] = useState("All");
 
   const allCategories: string[] = data?.categories || [];
-  const allTypes: string[] = (data as any)?.types || [];
   const displayCategories = ["All", ...allCategories];
 
   const services = data?.services || [];
@@ -273,7 +386,7 @@ export default function Services() {
       toast({ title: "Please select or add a category", variant: "destructive" });
       return;
     }
-    createService.mutate({ data: addForm }, {
+    createService.mutate({ data: addForm as any }, {
       onSuccess: () => {
         toast({ title: "Service added" });
         setShowAdd(false);
@@ -289,10 +402,10 @@ export default function Services() {
     setEditForm({
       name: s.name,
       category: s.category,
-      type: s.type || "",
-      price: s.price,
+      types: Array.isArray(s.types) ? s.types : [],
+      price: s.price ?? 0,
       memberDiscount: s.memberDiscount ?? 20,
-      memberPrice: s.memberPrice ?? Math.round(s.price * 0.8),
+      memberPrice: s.memberPrice ?? Math.round((s.price ?? 0) * 0.8),
     });
   };
 
@@ -337,18 +450,35 @@ export default function Services() {
   };
 
   const handleExport = () => {
-    const rows = filtered.map((s: any) => ({
-      "Name": s.name,
-      "Category": s.category,
-      "Type": s.type || "",
-      "Price (₹)": s.price,
-      "Member Discount (%)": s.memberDiscount ?? 20,
-      "Price for Members (₹)": s.memberPrice ?? Math.round(s.price * 0.8),
-    }));
+    const rows: any[] = [];
+    filtered.forEach((s: any) => {
+      const variants: TypeVariant[] = Array.isArray(s.types) ? s.types : [];
+      if (variants.length > 0) {
+        variants.forEach(v => {
+          rows.push({
+            "Name": s.name,
+            "Category": s.category,
+            "Type": v.name,
+            "Price (₹)": v.price,
+            "Member Discount (%)": v.memberDiscount,
+            "Price for Members (₹)": v.memberPrice,
+          });
+        });
+      } else {
+        rows.push({
+          "Name": s.name,
+          "Category": s.category,
+          "Type": "",
+          "Price (₹)": s.price,
+          "Member Discount (%)": s.memberDiscount ?? 20,
+          "Price for Members (₹)": s.memberPrice ?? Math.round(s.price * 0.8),
+        });
+      }
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 12 }, { wch: 20 }, { wch: 22 }];
+    ws["!cols"] = [{ wch: 30 }, { wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 22 }];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, categoryFilter === "All" ? "All Services" : categoryFilter.slice(0, 31));
+    XLSX.utils.book_append_sheet(wb, ws, "Services");
     XLSX.writeFile(wb, `services_${categoryFilter.replace(/\s+/g, "_").toLowerCase()}.xlsx`);
     toast({ title: "Excel file downloaded" });
   };
@@ -364,19 +494,45 @@ export default function Services() {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: any[] = XLSX.utils.sheet_to_json(ws);
         if (rows.length === 0) { toast({ title: "No data found in file", variant: "destructive" }); return; }
-        let success = 0, failed = 0;
+
+        // Group rows by (Name + Category) to build services with type variants
+        const serviceMap = new Map<string, { name: string; category: string; variants: TypeVariant[] }>();
         for (const row of rows) {
-          const name = row["Name"] || row["name"] || "";
-          const category = row["Category"] || row["category"] || "";
-          const type = row["Type"] || row["type"] || "";
+          const name = String(row["Name"] || row["name"] || "").trim();
+          const category = String(row["Category"] || row["category"] || "").trim();
+          const typeName = String(row["Type"] || row["type"] || "").trim();
           const price = Number(row["Price (₹)"] || row["price"] || 0);
           const memberDiscount = Number(row["Member Discount (%)"] || row["memberDiscount"] || 20);
           const memberPrice = Number(row["Price for Members (₹)"] || row["memberPrice"] || Math.round(price * (1 - memberDiscount / 100)));
-          if (!name || !category || price < 0) { failed++; continue; }
+          if (!name || !category) continue;
+          const key = `${name}|||${category}`;
+          if (!serviceMap.has(key)) serviceMap.set(key, { name, category, variants: [] });
+          if (typeName) {
+            serviceMap.get(key)!.variants.push({ name: typeName, price, memberDiscount, memberPrice });
+          } else {
+            // No type — store as base price (no variants)
+            serviceMap.get(key)!.variants = [];
+            const svc = serviceMap.get(key)!;
+            (svc as any).price = price;
+            (svc as any).memberDiscount = memberDiscount;
+            (svc as any).memberPrice = memberPrice;
+          }
+        }
+
+        let success = 0, failed = 0;
+        for (const svc of serviceMap.values()) {
+          const payload: any = {
+            name: svc.name,
+            category: svc.category,
+            types: svc.variants,
+            price: (svc as any).price ?? 0,
+            memberDiscount: (svc as any).memberDiscount ?? 20,
+            memberPrice: (svc as any).memberPrice ?? 0,
+          };
           try {
             await new Promise<void>((resolve, reject) => {
               createService.mutate(
-                { data: { name, category, type, price, memberDiscount, memberPrice } },
+                { data: payload },
                 { onSuccess: () => resolve(), onError: () => reject() }
               );
             });
@@ -458,46 +614,60 @@ export default function Services() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {items.map((s: any) => {
+                  const variants: TypeVariant[] = Array.isArray(s.types) ? s.types : [];
                   const memberPrice = s.memberPrice ?? Math.round(s.price * 0.8);
                   const memberDiscount = s.memberDiscount ?? 20;
                   return (
                     <div key={s.id || s._id} className="bg-card rounded-2xl p-5 border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 group relative">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors leading-tight pr-2">{s.name}</h3>
-                        {s.type && (
-                          <span className="text-[10px] font-semibold bg-secondary/20 text-secondary-foreground px-2 py-0.5 rounded-full shrink-0 border border-secondary/30">{s.type}</span>
-                        )}
-                      </div>
-                      <div className="border-t border-border/50 pt-3 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">Regular</span>
-                          <div className="flex items-center gap-1 text-primary font-bold">
-                            <IndianRupee className="w-3.5 h-3.5" /> {s.price.toLocaleString()}
+                      <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors leading-tight mb-3">{s.name}</h3>
+
+                      {variants.length > 0 ? (
+                        <div className="border-t border-border/50 pt-3 space-y-1.5">
+                          <div className="grid grid-cols-3 gap-1 mb-1">
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Type</span>
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Regular</span>
+                            <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide text-right">Member</span>
+                          </div>
+                          {variants.map((v: TypeVariant) => (
+                            <div key={v.name} className="grid grid-cols-3 gap-1 items-center">
+                              <span className="text-xs font-medium text-foreground truncate">{v.name}</span>
+                              <div className="flex items-center justify-end gap-0.5 text-primary font-bold text-xs">
+                                <IndianRupee className="w-3 h-3" />{v.price.toLocaleString()}
+                              </div>
+                              <div className="flex items-center justify-end gap-0.5 text-emerald-600 font-semibold text-xs">
+                                <IndianRupee className="w-3 h-3" />{v.memberPrice.toLocaleString()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="border-t border-border/50 pt-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">Regular</span>
+                            <div className="flex items-center gap-1 text-primary font-bold">
+                              <IndianRupee className="w-3.5 h-3.5" /> {s.price.toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1 text-xs text-emerald-600">
+                              <Users className="w-3 h-3" /> Members ({memberDiscount}% off)
+                            </div>
+                            <div className="flex items-center gap-1 text-emerald-600 font-semibold text-sm">
+                              <IndianRupee className="w-3.5 h-3.5" /> {memberPrice.toLocaleString()}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1 text-xs text-emerald-600">
-                            <Users className="w-3 h-3" /> Members ({memberDiscount}% off)
-                          </div>
-                          <div className="flex items-center gap-1 text-emerald-600 font-semibold text-sm">
-                            <IndianRupee className="w-3.5 h-3.5" /> {memberPrice.toLocaleString()}
-                          </div>
-                        </div>
-                      </div>
+                      )}
 
                       <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => openEdit(s)}
+                        <button onClick={() => openEdit(s)}
                           className="p-1.5 rounded-lg bg-card border border-border/60 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors shadow-sm"
-                          title="Edit service"
-                        >
+                          title="Edit service">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => setDeleteTarget(s)}
+                        <button onClick={() => setDeleteTarget(s)}
                           className="p-1.5 rounded-lg bg-card border border-border/60 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 transition-colors shadow-sm"
-                          title="Delete service"
-                        >
+                          title="Delete service">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -519,7 +689,6 @@ export default function Services() {
           onClose={() => { setShowAdd(false); setAddForm({ ...EMPTY_FORM }); }}
           isPending={createService.isPending}
           allCategories={allCategories}
-          allTypes={allTypes}
         />
       )}
 
@@ -532,7 +701,6 @@ export default function Services() {
           onClose={() => setEditService(null)}
           isPending={editPending}
           allCategories={allCategories}
-          allTypes={allTypes}
         />
       )}
 

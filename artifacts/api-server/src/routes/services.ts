@@ -6,23 +6,21 @@ const router = Router();
 router.get("/services", async (_req, res) => {
   const services = await Service.find().sort({ category: 1, name: 1 });
   const categories = [...new Set(services.map((s) => s.category))];
-  const types = [...new Set(services.map((s) => s.type).filter(Boolean))];
   res.json({
     services: services.map((s) => ({ ...s.toObject(), id: s._id.toString() })),
     categories,
-    types,
   });
 });
 
 router.post("/services", async (req, res) => {
-  const { name, category, type, price, memberDiscount, memberPrice } = req.body;
+  const { name, category, types, price, memberDiscount, memberPrice } = req.body;
   const computedMemberDiscount = memberDiscount ?? 20;
-  const computedMemberPrice = memberPrice ?? Math.round(price * (1 - computedMemberDiscount / 100));
+  const computedMemberPrice = memberPrice ?? Math.round((price ?? 0) * (1 - computedMemberDiscount / 100));
   const service = await Service.create({
     name,
     category,
-    type: type || "",
-    price,
+    types: Array.isArray(types) ? types : [],
+    price: price ?? 0,
     memberDiscount: computedMemberDiscount,
     memberPrice: computedMemberPrice,
   });
@@ -30,10 +28,17 @@ router.post("/services", async (req, res) => {
 });
 
 router.put("/services/:id", async (req, res) => {
-  const { name, category, type, price, memberDiscount, memberPrice } = req.body;
+  const { name, category, types, price, memberDiscount, memberPrice } = req.body;
   const service = await Service.findByIdAndUpdate(
     req.params.id,
-    { name, category, type: type || "", price, memberDiscount, memberPrice },
+    {
+      name,
+      category,
+      types: Array.isArray(types) ? types : [],
+      price: price ?? 0,
+      memberDiscount: memberDiscount ?? 20,
+      memberPrice: memberPrice ?? 0,
+    },
     { new: true }
   );
   if (!service) return res.status(404).json({ error: "Service not found" });

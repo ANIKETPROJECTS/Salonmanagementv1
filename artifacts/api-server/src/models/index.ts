@@ -52,20 +52,34 @@ export const Staff =
   mongoose.models.Staff || mongoose.model<IStaff>("Staff", StaffSchema);
 
 // ── Service ───────────────────────────────────────────────
-export interface IService extends Document {
+export interface IServiceTypeVariant {
   name: string;
-  category: string;
-  type?: string;
   price: number;
   memberDiscount: number;
   memberPrice: number;
 }
 
+export interface IService extends Document {
+  name: string;
+  category: string;
+  types: IServiceTypeVariant[];
+  price: number;
+  memberDiscount: number;
+  memberPrice: number;
+}
+
+const TypeVariantSchema = new Schema<IServiceTypeVariant>({
+  name: { type: String, required: true },
+  price: { type: Number, required: true },
+  memberDiscount: { type: Number, default: 20 },
+  memberPrice: { type: Number, default: 0 },
+}, { _id: false });
+
 const ServiceSchema = new Schema<IService>({
   name: { type: String, required: true },
   category: { type: String, required: true },
-  type: { type: String, default: "" },
-  price: { type: Number, required: true },
+  types: { type: [TypeVariantSchema], default: [] },
+  price: { type: Number, default: 0 },
   memberDiscount: { type: Number, default: 20 },
   memberPrice: { type: Number, default: 0 },
 });
