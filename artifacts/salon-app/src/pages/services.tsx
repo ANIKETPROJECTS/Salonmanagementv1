@@ -132,21 +132,8 @@ function TypeVariantRow({ variant, onChange, onRemove, index }: {
   onRemove: () => void;
   index: number;
 }) {
-  const setPrice = (price: number) => {
-    const memberPrice = price > 0 ? Math.round(price * (1 - variant.memberDiscount / 100)) : 0;
-    onChange({ ...variant, price, memberPrice });
-  };
-  const setDiscount = (memberDiscount: number) => {
-    const memberPrice = variant.price > 0 ? Math.round(variant.price * (1 - memberDiscount / 100)) : 0;
-    onChange({ ...variant, memberDiscount, memberPrice });
-  };
-  const setMemberPrice = (memberPrice: number) => {
-    const memberDiscount = variant.price > 0 ? Math.round(((variant.price - memberPrice) / variant.price) * 100) : 0;
-    onChange({ ...variant, memberPrice, memberDiscount });
-  };
-
   return (
-    <div className="bg-muted/30 rounded-xl p-3 border border-border/50 space-y-2">
+    <div className="bg-muted/30 rounded-xl p-3 border border-border/50">
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground font-medium w-5 shrink-0">{index + 1}.</span>
         <input required placeholder="Type name (e.g. Short, Medium...)"
@@ -154,36 +141,18 @@ function TypeVariantRow({ variant, onChange, onRemove, index }: {
           value={variant.name}
           onChange={e => onChange({ ...variant, name: e.target.value })}
         />
+        <div className="flex items-center gap-1 shrink-0">
+          <label className="text-[10px] font-medium text-muted-foreground">₹</label>
+          <input type="number" required min="0" placeholder="0"
+            className="w-24 p-2 rounded-lg border bg-card text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+            value={variant.price || ""}
+            onChange={e => onChange({ ...variant, price: Number(e.target.value), memberPrice: 0, memberDiscount: 0 })}
+          />
+        </div>
         <button type="button" onClick={onRemove}
           className="p-1.5 rounded-lg hover:bg-rose-50 hover:text-rose-600 text-muted-foreground transition-colors shrink-0">
           <X className="w-4 h-4" />
         </button>
-      </div>
-      <div className="grid grid-cols-3 gap-2 pl-7">
-        <div>
-          <label className="block text-[10px] font-medium text-muted-foreground mb-1">Price (₹) *</label>
-          <input type="number" required min="0" placeholder="0"
-            className="w-full p-2 rounded-lg border bg-card text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-            value={variant.price || ""}
-            onChange={e => setPrice(Number(e.target.value))}
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-medium text-emerald-600 mb-1">Disc %</label>
-          <input type="number" min="0" max="100" placeholder="20"
-            className="w-full p-2 rounded-lg border bg-card text-sm focus:ring-2 focus:ring-emerald-400/30 outline-none"
-            value={variant.memberDiscount === 0 ? "" : variant.memberDiscount}
-            onChange={e => setDiscount(Number(e.target.value) || 0)}
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-medium text-emerald-600 mb-1">Member (₹)</label>
-          <input type="number" min="0" placeholder="auto"
-            className="w-full p-2 rounded-lg border bg-card text-sm focus:ring-2 focus:ring-emerald-400/30 outline-none"
-            value={variant.memberPrice === 0 ? "" : variant.memberPrice}
-            onChange={e => setMemberPrice(Number(e.target.value) || 0)}
-          />
-        </div>
       </div>
     </div>
   );
@@ -635,19 +604,15 @@ export default function Services() {
                     </button>
                     {openCards[s.id || s._id] && (
                       <div className="mt-2 border border-border/40 rounded-xl overflow-hidden">
-                        <div className="grid grid-cols-3 gap-1 px-3 py-2 bg-muted/40">
+                        <div className="grid grid-cols-2 gap-1 px-3 py-2 bg-muted/40">
                           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Type</span>
-                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Regular</span>
-                          <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide text-right">Member</span>
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Price</span>
                         </div>
                         {variants.map((v: TypeVariant, vi: number) => (
-                          <div key={v.name} className={`grid grid-cols-3 gap-1 items-center px-3 py-1.5 ${vi % 2 === 0 ? "" : "bg-muted/20"}`}>
+                          <div key={v.name} className={`grid grid-cols-2 gap-1 items-center px-3 py-1.5 ${vi % 2 === 0 ? "" : "bg-muted/20"}`}>
                             <span className="text-xs font-medium text-foreground truncate">{v.name}</span>
                             <div className="flex items-center justify-end gap-0.5 text-primary font-bold text-xs">
                               <IndianRupee className="w-3 h-3 shrink-0" />{v.price.toLocaleString()}
-                            </div>
-                            <div className="flex items-center justify-end gap-0.5 text-emerald-600 font-semibold text-xs">
-                              <IndianRupee className="w-3 h-3 shrink-0" />{v.memberPrice.toLocaleString()}
                             </div>
                           </div>
                         ))}
