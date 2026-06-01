@@ -1,0 +1,2 @@
+- [Backend PORT fix](backend-port-fix.md) — api-server crashes on start if PORT env var not set; fixed to default to 8080.
+- [Artifact workflow conflict](artifact-workflow-conflict.md) — "artifacts/api-server: API Server" is Replit-managed and cannot be overridden; create a separate "API Server" workflow instead.
