@@ -4,6 +4,60 @@ import { Customer, Appointment, Bill, CustomerMembership } from "../models/index
 
 const router = Router();
 
+function escapeRegex(str: string) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function checkNamePhoneUniqueness(
+  name: string,
+  phone: string,
+  excludeId?: string
+): Promise<string | null> {
+  const excl = excludeId ? { _id: { $ne: excludeId } } : {};
+
+  const nameCustomer = await Customer.findOne({ ...excl, name: { $regex: `^${escapeRegex(name)}$`, $options: "i" } });
+  if (nameCustomer) return `A customer named "${name}" already exists.`;
+
+  const nameMember = await Customer.findOne({ ...excl, "familyMembers.name": { $regex: `^${escapeRegex(name)}$`, $options: "i" } });
+  if (nameMember) return `"${name}" already exists as a family member of ${nameMember.name}.`;
+
+  const phoneCustomer = await Customer.findOne({ ...excl, phone });
+  if (phoneCustomer) return `A customer with phone ${phone} already exists (${phoneCustomer.name}).`;
+
+  const phoneMember = await Customer.findOne({ ...excl, "familyMembers.phone": phone });
+  if (phoneMember) return `Phone ${phone} already belongs to a family member of ${phoneMember.name}.`;
+
+  return null;
+}
+
+async function checkMemberUniqueness(
+  members: { name: string; phone?: string }[],
+  excludeId?: string
+): Promise<string | null> {
+  const excl = excludeId ? { _id: { $ne: excludeId } } : {};
+
+  for (const m of members) {
+    if (!m.name) continue;
+    const mName = m.name.trim();
+    const mPhone = (m.phone || "").trim();
+
+    const mNameCust = await Customer.findOne({ ...excl, name: { $regex: `^${escapeRegex(mName)}$`, $options: "i" } });
+    if (mNameCust) return `Family member "${mName}" already exists as a customer.`;
+
+    const mNameMem = await Customer.findOne({ ...excl, "familyMembers.name": { $regex: `^${escapeRegex(mName)}$`, $options: "i" } });
+    if (mNameMem) return `Family member "${mName}" already exists under customer ${mNameMem.name}.`;
+
+    if (mPhone) {
+      const mPhoneCust = await Customer.findOne({ ...excl, phone: mPhone });
+      if (mPhoneCust) return `Family member "${mName}" phone ${mPhone} belongs to customer ${mPhoneCust.name}.`;
+
+      const mPhoneMem = await Customer.findOne({ ...excl, "familyMembers.phone": mPhone });
+      if (mPhoneMem) return `Phone ${mPhone} already belongs to a family member of ${mPhoneMem.name}.`;
+    }
+  }
+  return null;
+}
+
 // List customers with optional search (includes active membership)
 router.get("/customers", async (req, res) => {
   const { search } = req.query;
@@ -39,7 +93,17 @@ router.get("/customers", async (req, res) => {
 // Create customer
 router.post("/customers", async (req, res) => {
   const { name, phone, email, dob, anniversary, notes, gender, familyMembers } = req.body;
-  const customer = await Customer.create({ name, phone, email, dob, anniversary, notes, gender, familyMembers: familyMembers || [] });
+  const trimmedName = (name || "").trim();
+  const trimmedPhone = (phone || "").trim();
+
+  const mainError = await checkNamePhoneUniqueness(trimmedName, trimmedPhone);
+  if (mainError) return res.status(409).json({ error: mainError });
+
+  const members: { name: string; phone?: string }[] = familyMembers || [];
+  const memberError = await checkMemberUniqueness(members);
+  if (memberError) return res.status(409).json({ error: memberError });
+
+  const customer = await Customer.create({ name: trimmedName, phone: trimmedPhone, email, dob, anniversary, notes, gender, familyMembers: members });
   res.status(201).json({ ...customer.toObject(), id: customer._id.toString() });
 });
 
@@ -47,6 +111,19 @@ router.post("/customers", async (req, res) => {
 router.patch("/customers/:customerId", async (req, res) => {
   const { customerId } = req.params;
   const { name, phone, dob, anniversary, notes, email, gender, familyMembers } = req.body;
+
+  if (name || phone) {
+    const trimmedName = (name || "").trim();
+    const trimmedPhone = (phone || "").trim();
+    const mainError = await checkNamePhoneUniqueness(trimmedName, trimmedPhone, customerId);
+    if (mainError) return res.status(409).json({ error: mainError });
+  }
+
+  if (familyMembers !== undefined) {
+    const memberError = await checkMemberUniqueness(familyMembers, customerId);
+    if (memberError) return res.status(409).json({ error: memberError });
+  }
+
   const customer = await Customer.findByIdAndUpdate(
     customerId,
     {
@@ -71,7 +148,6 @@ router.delete("/customers/:customerId", async (req, res) => {
 });
 
 // Get single customer with bills and appointments
-// Phone is the primary key for all bill/visit calculations
 router.get("/customers/:customerId", async (req, res) => {
   const { customerId } = req.params;
   const customer = await Customer.findById(customerId);
@@ -80,7 +156,6 @@ router.get("/customers/:customerId", async (req, res) => {
   const today = format(new Date(), "yyyy-MM-dd");
   const phone = customer.phone;
 
-  // Query bills by customerId OR customerPhone so phone is the true primary key
   const billQuery = phone
     ? { $or: [{ customerId: customerId.toString() }, { customerPhone: phone }] }
     : { customerId: customerId.toString() };
@@ -93,12 +168,10 @@ router.get("/customers/:customerId", async (req, res) => {
     CustomerMembership.findOne({ customerId: customerId.toString(), isActive: true, endDate: { $gte: today } }),
   ]);
 
-  // Re-compute spend and visits from actual bills (phone-based)
   const computedTotalSpend = bills.reduce((sum, b) => sum + (b.finalAmount || 0), 0);
   const computedTotalVisits = bills.length;
   const lastVisit = bills.length > 0 ? bills[0].createdAt : null;
 
-  // Sync stored values if drifted
   if (customer.totalSpend !== computedTotalSpend || customer.totalVisits !== computedTotalVisits) {
     await Customer.findByIdAndUpdate(customerId, {
       totalSpend: computedTotalSpend,

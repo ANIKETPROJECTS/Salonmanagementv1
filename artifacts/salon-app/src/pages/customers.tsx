@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useListCustomers, useCreateCustomer, useListMemberships } from "@workspace/api-client-react";
+import { useListCustomers, useListMemberships } from "@workspace/api-client-react";
 import { Search, Plus, User, Phone, Calendar, Eye, Pencil, Trash2, X, Scissors, Package, FileText, BadgeCheck, Users, ChevronDown, ChevronUp, Crown } from "lucide-react";
 import { format, addMonths, subDays, parseISO } from "date-fns";
 import { Link } from "wouter";
@@ -55,13 +55,13 @@ export default function Customers() {
   const [sortKey, setSortKey] = useState<SortKey>("default");
 
   const { data, isLoading, refetch } = useListCustomers({ search });
-  const createCustomer = useCreateCustomer();
   const { data: membershipData } = useListMemberships();
   const { toast } = useToast();
 
   const membershipPlans: any[] = (membershipData as any)?.memberships || [];
 
   const [showAdd, setShowAdd] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
   const [phoneError, setPhoneError] = useState("");
   const [formData, setFormData] = useState({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] as FamilyMember[], membershipId: "", membershipStartDate: format(new Date(), "yyyy-MM-dd") });
   const [showFamilySection, setShowFamilySection] = useState(false);
@@ -116,25 +116,38 @@ export default function Customers() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validatePhone(formData.phone)) return;
-    createCustomer.mutate({ data: { ...formData, email: "" } as any }, {
-      onSuccess: async (created: any) => {
-        const customerId = created?.id || created?._id;
-        if (formData.membershipId && customerId) {
-          try {
-            await fetch(`${API_BASE}/customer-memberships`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ customerId, membershipId: formData.membershipId, startDate: formData.membershipStartDate }),
-            });
-          } catch {}
-        }
-        toast({ title: "Customer Added", description: `${formData.name} has been registered.` });
-        setShowAdd(false);
-        resetAddForm();
-        refetch();
-      },
-      onError: () => toast({ title: "Error", description: "Failed to add customer.", variant: "destructive" }),
-    });
+    setCreateLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/customers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...formData, email: "" }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Already Exists", description: err.error || "Failed to add customer.", variant: "destructive" });
+        return;
+      }
+      const created = await res.json();
+      const customerId = created?.id || created?._id;
+      if (formData.membershipId && customerId) {
+        try {
+          await fetch(`${API_BASE}/customer-memberships`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ customerId, membershipId: formData.membershipId, startDate: formData.membershipStartDate }),
+          });
+        } catch {}
+      }
+      toast({ title: "Customer Added", description: `${formData.name} has been registered.` });
+      setShowAdd(false);
+      resetAddForm();
+      refetch();
+    } catch {
+      toast({ title: "Error", description: "Failed to add customer.", variant: "destructive" });
+    } finally {
+      setCreateLoading(false);
+    }
   };
 
   const openView = async (customerId: string) => {
@@ -180,7 +193,11 @@ export default function Customers() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: editForm.name, phone: editForm.phone, dob: editForm.dob, anniversary: editForm.anniversary, gender: editForm.gender, familyMembers: editForm.familyMembers }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Already Exists", description: err.error || "Failed to update customer.", variant: "destructive" });
+        return;
+      }
       if (editMembershipId) {
         try {
           await fetch(`${API_BASE}/customer-memberships`, {
@@ -562,9 +579,9 @@ export default function Customers() {
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => { setShowAdd(false); resetAddForm(); }}
                   className="flex-1 py-3 rounded-xl border hover:bg-muted font-medium transition-colors">Cancel</button>
-                <button type="submit" disabled={createCustomer.isPending}
+                <button type="submit" disabled={createLoading}
                   className="flex-1 py-3 rounded-xl bg-primary text-white font-medium hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 disabled:opacity-50">
-                  {createCustomer.isPending ? "Saving..." : "Add Customer"}
+                  {createLoading ? "Saving..." : "Add Customer"}
                 </button>
               </div>
             </form>

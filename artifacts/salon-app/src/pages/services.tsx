@@ -233,7 +233,7 @@ function ServiceModal({
 
             {safeTypes.length === 0 ? (
               <p className="text-xs text-muted-foreground italic py-1">
-                No variants — this service has a single price below. Click "Add Type" to create price variants (e.g. Short, Medium, Long).
+                No variants — click "Add Type" to create price variants (e.g. Short, Medium, Long).
               </p>
             ) : (
               <div className="space-y-2">
@@ -246,56 +246,6 @@ function ServiceModal({
             )}
           </div>
 
-          {/* Base price — only when no type variants */}
-          {safeTypes.length === 0 && (
-            <>
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Price (₹) *</label>
-                <input type="number" required min="0" placeholder="0"
-                  className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
-                  value={form.price || ""}
-                  onChange={e => setPrice(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl p-4 border border-emerald-200 dark:border-emerald-800/40 space-y-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <Users className="w-4 h-4 text-emerald-600" />
-                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Member Pricing</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-1.5">Member Discount (%)</label>
-                    <input type="number" min="0" max="100" placeholder="20"
-                      className="w-full p-3 rounded-xl border bg-white dark:bg-muted/30 focus:ring-2 focus:ring-emerald-400/30 outline-none text-sm"
-                      value={form.memberDiscount === 0 ? "" : form.memberDiscount}
-                      onChange={e => setMemberDiscount(Number(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-1.5">Price for Members (₹)</label>
-                    <input type="number" min="0" placeholder="auto"
-                      className="w-full p-3 rounded-xl border bg-white dark:bg-muted/30 focus:ring-2 focus:ring-emerald-400/30 outline-none text-sm"
-                      value={form.memberPrice === 0 ? "" : form.memberPrice}
-                      onChange={e => setMemberPrice(Number(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
-                {form.price > 0 && (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                    Members save ₹{(form.price - form.memberPrice).toLocaleString()} ({form.memberDiscount}% off the regular price)
-                  </p>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* Member pricing hint when variants exist */}
-          {safeTypes.length > 0 && (
-            <p className="text-xs text-muted-foreground bg-muted/40 rounded-xl p-3 border border-border/40">
-              Pricing is set per type variant above — no separate base price needed.
-            </p>
-          )}
 
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}

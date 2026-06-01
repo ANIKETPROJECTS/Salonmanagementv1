@@ -52,6 +52,7 @@ export default function POS() {
   const [paymentMethod, setPaymentMethod]   = useState<"cash" | "upi" | "card" | "wallet">("upi");
   const [taxEnabled, setTaxEnabled]         = useState(false);
   const [taxRate, setTaxRate]               = useState(18);
+  const [selectedMemberParentName, setSelectedMemberParentName] = useState("");
   const [globalDiscountAmt, setGlobalDiscountAmt]   = useState(0);
   const [customerSearch, setCustomerSearch]         = useState("");
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
@@ -108,11 +109,36 @@ export default function POS() {
     );
   }, [services, products, activeTab, search, activeCategory]);
 
+  // Expand customers list to include family members as selectable entries
+  const expandedCustomers = useMemo(() => {
+    const result: any[] = [];
+    for (const c of customers) {
+      result.push({ ...c, _isFamily: false });
+      const members: any[] = Array.isArray(c.familyMembers) ? c.familyMembers : [];
+      for (const m of members) {
+        if (!m.name) continue;
+        result.push({
+          id: `family:${c.id || c._id}:${m.name}`,
+          name: m.name,
+          phone: m.phone || "",
+          gender: m.gender || "",
+          dob: m.dob || "",
+          anniversary: m.anniversary || "",
+          _isFamily: true,
+          _parentId: c.id || c._id,
+          _parentName: c.name,
+          activeMembership: c.activeMembership,
+        });
+      }
+    }
+    return result;
+  }, [customers]);
+
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return customers;
+    if (!customerSearch) return expandedCustomers;
     const t = customerSearch.toLowerCase();
-    return customers.filter((c: any) => c.name?.toLowerCase().includes(t) || c.phone?.includes(t));
-  }, [customers, customerSearch]);
+    return expandedCustomers.filter((c: any) => c.name?.toLowerCase().includes(t) || c.phone?.includes(t));
+  }, [expandedCustomers, customerSearch]);
 
   const addToCart = (item: any, overridePrice?: number, overrideName?: string) => {
     const id    = item.id || item._id;
@@ -164,17 +190,28 @@ export default function POS() {
   };
 
   const selectCustomer = (c: any) => {
-    const cid = c.id || c._id;
-    setCustomerId(cid); setCustomerName(c.name); setCustomerPhone(c.phone);
-    setCustomerDob(c.dob || ""); setCustomerAnniversary(c.anniversary || "");
+    if (c._isFamily) {
+      setCustomerId(c._parentId);
+      setCustomerName(c.name);
+      setCustomerPhone(c.phone || "");
+      setCustomerDob(c.dob || "");
+      setCustomerAnniversary(c.anniversary || "");
+      setSelectedMemberParentName(c._parentName);
+      setCustomerMembership(c.activeMembership || null);
+    } else {
+      const cid = c.id || c._id;
+      setCustomerId(cid); setCustomerName(c.name); setCustomerPhone(c.phone);
+      setCustomerDob(c.dob || ""); setCustomerAnniversary(c.anniversary || "");
+      setSelectedMemberParentName("");
+      if (c.activeMembership !== undefined) setCustomerMembership(c.activeMembership);
+      else fetchMembership(cid);
+    }
     setShowCustomerDropdown(false); setCustomerSearch("");
-    if (c.activeMembership !== undefined) setCustomerMembership(c.activeMembership);
-    else fetchMembership(cid);
   };
 
   const selectWalkIn = () => {
     setCustomerId(""); setCustomerName("Walk-in Customer"); setCustomerPhone("");
-    setCustomerDob(""); setCustomerAnniversary("");
+    setCustomerDob(""); setCustomerAnniversary(""); setSelectedMemberParentName("");
     setShowCustomerDropdown(false); setCustomerSearch(""); setCustomerMembership(null);
   };
 
@@ -187,7 +224,11 @@ export default function POS() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: addForm.name, phone: addForm.phone, dob: addForm.dob, gender: addForm.gender, email: "" }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setAddPhoneError(err.error || "Failed to add customer.");
+        return;
+      }
       const newC = await res.json(); await refetchCustomers(); selectCustomer(newC);
       setShowAddCustomer(false); setAddForm({ name: "", phone: "", dob: "", gender: "" }); setAddPhoneError("");
       toast({ title: "Customer Added", description: `${addForm.name} added & selected.` });
@@ -376,7 +417,10 @@ export default function POS() {
               <UserCircle2 className="w-5 h-5 shrink-0 text-sidebar-primary" />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold truncate text-white">{customerName || "Walk-in Customer"}</p>
-                {customerPhone && <p className="text-xs text-white/60">{customerPhone}</p>}
+                {selectedMemberParentName && (
+                  <p className="text-[10px] text-violet-300 font-medium">Family of {selectedMemberParentName}</p>
+                )}
+                {!selectedMemberParentName && customerPhone && <p className="text-xs text-white/60">{customerPhone}</p>}
               </div>
               <ChevronDown className={`w-4 h-4 shrink-0 transition-transform text-white ${showCustomerDropdown ? "rotate-180" : ""}`} />
             </button>
@@ -401,18 +445,24 @@ export default function POS() {
                     {!customerId && <Check className="w-3.5 h-3.5 ml-auto text-sidebar-primary" />}
                   </button>
                   {filteredCustomers.map((c: any) => {
-                    const cid = c.id || c._id;
-                    const sel = customerId === cid;
+                    const key = c._isFamily ? `fm-${c._parentId}-${c.name}` : (c.id || c._id);
+                    const sel = c._isFamily
+                      ? (customerId === c._parentId && customerName === c.name)
+                      : customerId === (c.id || c._id);
                     return (
-                      <button key={cid} onClick={() => selectCustomer(c)}
+                      <button key={key} onClick={() => selectCustomer(c)}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors hover:bg-sidebar/50 text-white"
                         style={{ background: sel ? "hsl(var(--sidebar) / 0.6)" : "transparent" }}>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 bg-sidebar text-white">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 text-white ${c._isFamily ? "bg-violet-500/30" : "bg-sidebar"}`}>
                           {c.name.substring(0, 2).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0 text-left">
                           <p className="font-medium truncate text-xs text-white">{c.name}</p>
-                          <p className="text-[11px] text-white/60">{c.phone}</p>
+                          {c._isFamily ? (
+                            <p className="text-[11px] text-violet-300">Family of {c._parentName}</p>
+                          ) : (
+                            <p className="text-[11px] text-white/60">{c.phone}</p>
+                          )}
                         </div>
                         {c.activeMembership && (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold shrink-0 text-sidebar-primary"
