@@ -40,6 +40,22 @@ router.get("/bills/:billId", async (req, res) => {
   res.json({ ...bill.toObject(), id: bill._id.toString() });
 });
 
+router.delete("/bills/:billId", async (req, res) => {
+  const { billId } = req.params;
+  const bill = await Bill.findById(billId);
+  if (!bill) return res.status(404).json({ error: "Bill not found" });
+
+  // Reverse the customer totalSpend and totalVisits if this bill was linked to a customer
+  if (bill.customerId) {
+    await Customer.findByIdAndUpdate(bill.customerId, {
+      $inc: { totalSpend: -bill.finalAmount, totalVisits: -1 },
+    });
+  }
+
+  await Bill.findByIdAndDelete(billId);
+  res.json({ success: true });
+});
+
 router.post("/bills", async (req, res) => {
   const {
     customerId,

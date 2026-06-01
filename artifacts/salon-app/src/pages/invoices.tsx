@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
-import { Search, FileText, Filter, X, Eye, Calendar, Phone } from "lucide-react";
+import { Search, FileText, X, Eye, Calendar, Phone, Trash2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { InvoiceModal } from "@/components/InvoiceModal";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const API_BASE = "/api";
 
@@ -22,14 +22,30 @@ const PAY_COLORS: Record<string, string> = {
 
 export default function Invoices() {
   const { data, isLoading } = useQuery({ queryKey: ["bills"], queryFn: fetchBills });
+  const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [payFilter, setPayFilter] = useState("all");
   const [viewBill, setViewBill] = useState<any>(null);
+  const [deleteBill, setDeleteBill] = useState<any>(null);
+  const [deleting, setDeleting] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+
+  const handleDelete = async () => {
+    if (!deleteBill) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_BASE}/bills/${deleteBill.id || deleteBill._id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      queryClient.invalidateQueries({ queryKey: ["bills"] });
+      setDeleteBill(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const bills: any[] = data?.bills || [];
 
@@ -245,12 +261,20 @@ export default function Invoices() {
 
                     {/* Action */}
                     <td className="p-4 pr-6 text-right">
-                      <button
-                        onClick={() => setViewBill(bill)}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-semibold ml-auto"
-                      >
-                        <Eye className="w-4 h-4" /> View
-                      </button>
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => setViewBill(bill)}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-semibold"
+                        >
+                          <Eye className="w-4 h-4" /> View
+                        </button>
+                        <button
+                          onClick={() => setDeleteBill(bill)}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors text-sm font-semibold"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -302,6 +326,42 @@ export default function Invoices() {
       {/* Invoice Modal */}
       {viewBill && (
         <InvoiceModal bill={viewBill} onClose={() => setViewBill(null)} />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteBill && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 text-base">Delete Invoice?</h3>
+                <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+              </div>
+            </div>
+            <div className="bg-rose-50 rounded-xl p-3 mb-5 text-sm text-rose-800">
+              <span className="font-semibold">{deleteBill.billNumber}</span> — {deleteBill.customerName} &nbsp;·&nbsp; ₹{Number(deleteBill.finalAmount).toLocaleString("en-IN")}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteBill(null)}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-border hover:bg-muted transition-colors text-sm font-semibold disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors text-sm font-semibold disabled:opacity-50"
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
