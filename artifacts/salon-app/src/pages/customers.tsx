@@ -60,9 +60,11 @@ export default function Customers() {
 
   const membershipPlans: any[] = (membershipData as any)?.memberships || [];
 
+  type FieldErrors = { name?: string; phone?: string; members?: Record<number, { name?: string; phone?: string }> };
+
   const [showAdd, setShowAdd] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
-  const [createError, setCreateError] = useState("");
+  const [createFieldErrors, setCreateFieldErrors] = useState<FieldErrors>({});
   const [phoneError, setPhoneError] = useState("");
   const [formData, setFormData] = useState({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] as FamilyMember[], membershipId: "", membershipStartDate: format(new Date(), "yyyy-MM-dd") });
   const [showFamilySection, setShowFamilySection] = useState(false);
@@ -74,7 +76,7 @@ export default function Customers() {
   const [editCustomer, setEditCustomer] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [] as FamilyMember[] });
   const [editPhoneError, setEditPhoneError] = useState("");
-  const [editError, setEditError] = useState("");
+  const [editFieldErrors, setEditFieldErrors] = useState<FieldErrors>({});
   const [editSaving, setEditSaving] = useState(false);
   const [showEditFamilySection, setShowEditFamilySection] = useState(false);
   const [editMembershipId, setEditMembershipId] = useState("");
@@ -123,10 +125,26 @@ export default function Customers() {
     setPhoneError(""); return true;
   };
 
+  const parseApiError = (msg: string, members: { name: string }[]): FieldErrors => {
+    const fmMatch = msg.match(/^Family member '(.+?)'/);
+    if (fmMatch) {
+      const memberName = fmMatch[1];
+      const idx = Math.max(0, members.findIndex(m => m.name.trim().toLowerCase() === memberName.toLowerCase()));
+      const bothMatch = /name and phone/i.test(msg);
+      const phoneOnly = !bothMatch && /phone/i.test(msg);
+      const nameOnly = !bothMatch && !phoneOnly;
+      return { members: { [idx]: { ...(nameOnly || bothMatch ? { name: msg } : {}), ...(phoneOnly || bothMatch ? { phone: msg } : {}) } } };
+    }
+    const both = /name and phone/i.test(msg);
+    const phoneOnly = !both && /phone/i.test(msg);
+    const nameOnly = !both && !phoneOnly;
+    return { ...(nameOnly || both ? { name: msg } : {}), ...(phoneOnly || both ? { phone: msg } : {}) };
+  };
+
   const resetAddForm = () => {
     setFormData({ name: "", phone: "", dob: "", anniversary: "", gender: "", familyMembers: [], membershipId: "", membershipStartDate: format(new Date(), "yyyy-MM-dd") });
     setPhoneError("");
-    setCreateError("");
+    setCreateFieldErrors({});
     setShowFamilySection(false);
   };
 
@@ -142,10 +160,11 @@ export default function Customers() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setCreateError(err.error || "Failed to add customer.");
+        const msg = err.error || "Failed to add customer.";
+        setCreateFieldErrors(parseApiError(msg, formData.familyMembers));
         return;
       }
-      setCreateError("");
+      setCreateFieldErrors({});
       const created = await res.json();
       const customerId = created?.id || created?._id;
       if (formData.membershipId && customerId) {
@@ -162,7 +181,7 @@ export default function Customers() {
       resetAddForm();
       refetch();
     } catch {
-      setCreateError("Something went wrong. Please try again.");
+      setCreateFieldErrors({ name: "Something went wrong. Please try again." });
     } finally {
       setCreateLoading(false);
     }
@@ -195,7 +214,7 @@ export default function Customers() {
       })) : [],
     });
     setEditPhoneError("");
-    setEditError("");
+    setEditFieldErrors({});
     setEditMembershipId("");
     setEditMembershipStartDate(format(new Date(), "yyyy-MM-dd"));
     setShowEditFamilySection(Array.isArray(c.familyMembers) && c.familyMembers.length > 0);
@@ -214,10 +233,11 @@ export default function Customers() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setEditError(err.error || "Failed to update customer.");
+        const msg = err.error || "Failed to update customer.";
+        setEditFieldErrors(parseApiError(msg, editForm.familyMembers));
         return;
       }
-      setEditError("");
+      setEditFieldErrors({});
       if (editMembershipId) {
         try {
           await fetch(`${API_BASE}/customer-memberships`, {
@@ -486,18 +506,13 @@ export default function Customers() {
               </button>
             </div>
             <form onSubmit={handleCreate} className="overflow-y-auto flex-1 px-8 pb-8 space-y-4">
-              {createError && (
-                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm animate-in fade-in">
-                  <span className="mt-0.5 shrink-0 text-red-500">⚠</span>
-                  <span>{createError}</span>
-                </div>
-              )}
               {/* Name */}
               <div>
                 <label className="block text-sm font-medium mb-1 text-muted-foreground">Customer Name *</label>
                 <input required autoFocus placeholder="Enter full name"
-                  className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
-                  value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                  className={`w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 outline-none ${createFieldErrors.name ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
+                  value={formData.name} onChange={e => { setFormData({ ...formData, name: e.target.value }); setCreateFieldErrors(fe => ({ ...fe, name: undefined })); }} />
+                {createFieldErrors.name && <p className="text-red-500 text-xs mt-1">{createFieldErrors.name}</p>}
               </div>
               {/* Gender */}
               <div>
@@ -508,11 +523,11 @@ export default function Customers() {
               <div>
                 <label className="block text-sm font-medium mb-1 text-muted-foreground">Contact No * (10 digits)</label>
                 <input required type="tel" maxLength={10} placeholder="10-digit mobile number"
-                  className={`w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 outline-none ${phoneError ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
+                  className={`w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 outline-none ${(phoneError || createFieldErrors.phone) ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
                   value={formData.phone}
-                  onChange={e => { const v = e.target.value.replace(/\D/g, ""); setFormData({ ...formData, phone: v }); if (v.length === 10) setPhoneError(""); }}
+                  onChange={e => { const v = e.target.value.replace(/\D/g, ""); setFormData({ ...formData, phone: v }); if (v.length === 10) setPhoneError(""); setCreateFieldErrors(fe => ({ ...fe, phone: undefined })); }}
                   onBlur={e => validatePhone(e.target.value)} />
-                {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
+                {(phoneError || createFieldErrors.phone) && <p className="text-red-500 text-xs mt-1">{phoneError || createFieldErrors.phone}</p>}
               </div>
               {/* DOB */}
               <div>
@@ -620,8 +635,9 @@ export default function Customers() {
                       <div>
                         <label className="block text-xs font-medium mb-1 text-muted-foreground">Name *</label>
                         <input required placeholder="Member name"
-                          className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
-                          value={m.name} onChange={e => { const members = [...formData.familyMembers]; members[idx] = { ...m, name: e.target.value }; setFormData(f => ({ ...f, familyMembers: members })); }} />
+                          className={`w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 outline-none text-sm ${createFieldErrors.members?.[idx]?.name ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
+                          value={m.name} onChange={e => { const members = [...formData.familyMembers]; members[idx] = { ...m, name: e.target.value }; setFormData(f => ({ ...f, familyMembers: members })); setCreateFieldErrors(fe => { const ms = { ...(fe.members || {}) }; if (ms[idx]) ms[idx] = { ...ms[idx], name: undefined }; return { ...fe, members: ms }; }); }} />
+                        {createFieldErrors.members?.[idx]?.name && <p className="text-red-500 text-xs mt-1">{createFieldErrors.members[idx].name}</p>}
                       </div>
                       <div>
                         <label className="block text-xs font-medium mb-1.5 text-muted-foreground">Gender</label>
@@ -630,8 +646,9 @@ export default function Customers() {
                       <div>
                         <label className="block text-xs font-medium mb-1 text-muted-foreground">Contact No</label>
                         <input type="tel" maxLength={10} placeholder="10-digit number"
-                          className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
-                          value={m.phone} onChange={e => { const v = e.target.value.replace(/\D/g, ""); const members = [...formData.familyMembers]; members[idx] = { ...m, phone: v }; setFormData(f => ({ ...f, familyMembers: members })); }} />
+                          className={`w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 outline-none text-sm ${createFieldErrors.members?.[idx]?.phone ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
+                          value={m.phone} onChange={e => { const v = e.target.value.replace(/\D/g, ""); const members = [...formData.familyMembers]; members[idx] = { ...m, phone: v }; setFormData(f => ({ ...f, familyMembers: members })); setCreateFieldErrors(fe => { const ms = { ...(fe.members || {}) }; if (ms[idx]) ms[idx] = { ...ms[idx], phone: undefined }; return { ...fe, members: ms }; }); }} />
+                        {createFieldErrors.members?.[idx]?.phone && <p className="text-red-500 text-xs mt-1">{createFieldErrors.members[idx].phone}</p>}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -676,17 +693,12 @@ export default function Customers() {
               </button>
             </div>
             <form onSubmit={handleEdit} className="overflow-y-auto flex-1 px-8 pb-8 space-y-4">
-              {editError && (
-                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm animate-in fade-in">
-                  <span className="mt-0.5 shrink-0 text-red-500">⚠</span>
-                  <span>{editError}</span>
-                </div>
-              )}
               <div>
                 <label className="block text-sm font-medium mb-1 text-muted-foreground">Customer Name *</label>
                 <input required autoFocus placeholder="Enter full name"
-                  className="w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none"
-                  value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
+                  className={`w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 outline-none ${editFieldErrors.name ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
+                  value={editForm.name} onChange={e => { setEditForm({ ...editForm, name: e.target.value }); setEditFieldErrors(fe => ({ ...fe, name: undefined })); }} />
+                {editFieldErrors.name && <p className="text-red-500 text-xs mt-1">{editFieldErrors.name}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2 text-muted-foreground">Gender</label>
@@ -695,11 +707,11 @@ export default function Customers() {
               <div>
                 <label className="block text-sm font-medium mb-1 text-muted-foreground">Contact No * (10 digits)</label>
                 <input required type="tel" maxLength={10} placeholder="10-digit mobile number"
-                  className={`w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 outline-none ${editPhoneError ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
+                  className={`w-full p-3 rounded-xl border bg-muted/30 focus:ring-2 outline-none ${(editPhoneError || editFieldErrors.phone) ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
                   value={editForm.phone}
-                  onChange={e => { const v = e.target.value.replace(/\D/g, ""); setEditForm({ ...editForm, phone: v }); if (v.length === 10) setEditPhoneError(""); }}
+                  onChange={e => { const v = e.target.value.replace(/\D/g, ""); setEditForm({ ...editForm, phone: v }); if (v.length === 10) setEditPhoneError(""); setEditFieldErrors(fe => ({ ...fe, phone: undefined })); }}
                   onBlur={e => { if (!/^\d{10}$/.test(e.target.value)) setEditPhoneError("Phone number must be exactly 10 digits"); else setEditPhoneError(""); }} />
-                {editPhoneError && <p className="text-red-500 text-xs mt-1">{editPhoneError}</p>}
+                {(editPhoneError || editFieldErrors.phone) && <p className="text-red-500 text-xs mt-1">{editPhoneError || editFieldErrors.phone}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-muted-foreground">Birth Date <span className="text-muted-foreground/60 font-normal">(optional)</span></label>
@@ -805,8 +817,9 @@ export default function Customers() {
                       <div>
                         <label className="block text-xs font-medium mb-1 text-muted-foreground">Name *</label>
                         <input required placeholder="Member name"
-                          className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
-                          value={m.name} onChange={e => { const members = [...editForm.familyMembers]; members[idx] = { ...m, name: e.target.value }; setEditForm(f => ({ ...f, familyMembers: members })); }} />
+                          className={`w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 outline-none text-sm ${editFieldErrors.members?.[idx]?.name ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
+                          value={m.name} onChange={e => { const members = [...editForm.familyMembers]; members[idx] = { ...m, name: e.target.value }; setEditForm(f => ({ ...f, familyMembers: members })); setEditFieldErrors(fe => { const ms = { ...(fe.members || {}) }; if (ms[idx]) ms[idx] = { ...ms[idx], name: undefined }; return { ...fe, members: ms }; }); }} />
+                        {editFieldErrors.members?.[idx]?.name && <p className="text-red-500 text-xs mt-1">{editFieldErrors.members[idx].name}</p>}
                       </div>
                       <div>
                         <label className="block text-xs font-medium mb-1.5 text-muted-foreground">Gender</label>
@@ -815,8 +828,9 @@ export default function Customers() {
                       <div>
                         <label className="block text-xs font-medium mb-1 text-muted-foreground">Contact No</label>
                         <input type="tel" maxLength={10} placeholder="10-digit number"
-                          className="w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 focus:ring-primary/20 outline-none text-sm"
-                          value={m.phone} onChange={e => { const v = e.target.value.replace(/\D/g, ""); const members = [...editForm.familyMembers]; members[idx] = { ...m, phone: v }; setEditForm(f => ({ ...f, familyMembers: members })); }} />
+                          className={`w-full p-2.5 rounded-lg border bg-muted/30 focus:ring-2 outline-none text-sm ${editFieldErrors.members?.[idx]?.phone ? "border-red-400 focus:ring-red-200" : "focus:ring-primary/20"}`}
+                          value={m.phone} onChange={e => { const v = e.target.value.replace(/\D/g, ""); const members = [...editForm.familyMembers]; members[idx] = { ...m, phone: v }; setEditForm(f => ({ ...f, familyMembers: members })); setEditFieldErrors(fe => { const ms = { ...(fe.members || {}) }; if (ms[idx]) ms[idx] = { ...ms[idx], phone: undefined }; return { ...fe, members: ms }; }); }} />
+                        {editFieldErrors.members?.[idx]?.phone && <p className="text-red-500 text-xs mt-1">{editFieldErrors.members[idx].phone}</p>}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
