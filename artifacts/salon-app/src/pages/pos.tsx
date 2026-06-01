@@ -590,9 +590,9 @@ export default function POS() {
                   className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-sidebar hover:bg-sidebar/80 transition-colors">
                   <span className="text-sm font-semibold text-white">{v.name}</span>
                   <div className="text-right">
-                    <span className="text-primary font-bold text-sm">₹{(Number(v.price) || 0).toLocaleString("en-IN")}</span>
+                    <span className="text-white font-bold text-sm">₹{(Number(v.price) || 0).toLocaleString("en-IN")}</span>
                     {autoDiscountPct > 0 && (
-                      <span className="block text-[10px] text-white/50">
+                      <span className="block text-[10px] text-emerald-400">
                         after disc: ₹{Math.round((Number(v.price) || 0) * (1 - autoDiscountPct / 100)).toLocaleString("en-IN")}
                       </span>
                     )}
